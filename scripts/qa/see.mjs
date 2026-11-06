@@ -40,19 +40,46 @@ function audit(minFont) {
   if (clipped.length) defects.push({ kind: 'clipped_text', count: clipped.length, items: clipped.slice(0, 10) });
   const offscreen = leaves.filter((el) => { const r = el.getBoundingClientRect(); return r.right > W + 2 || r.left < -2; }).slice(0, 20).map((el) => ({ el: label(el), text: text(el) }));
   if (offscreen.length) defects.push({ kind: 'off_screen', count: offscreen.length, items: offscreen.slice(0, 10) });
+  // Program values leaking onto the screen ("null", "undefined", "NaN", "[object Object]").
+  const leaked = leaves.filter((el) => [...el.childNodes].some((n) => n.nodeType === 3 && /(^|[^A-Za-z])(null|undefined|NaN|\[object Object\])([^A-Za-z]|$)/.test(n.textContent)))
+    .slice(0, 10).map((el) => ({ el: label(el), text: text(el) }));
+  if (leaked.length) defects.push({ kind: 'leaked_value', count: leaked.length, items: leaked });
   if (doc.scrollWidth > W + 2) defects.push({ kind: 'horizontal_scroll', count: 1, items: [{ width: doc.scrollWidth, viewport: W }] });
   // Overlap between interactive controls and text blocks that are not ancestors/descendants of each other.
   const boxes = [...document.body.querySelectorAll('button,a,input,textarea,select,[role=button],h1,h2,h3,p,label,li,td,th,img')]
     .filter((el) => vis(el) && getComputedStyle(el).position !== 'fixed').slice(0, 600).map((el) => ({ el, r: el.getBoundingClientRect() }));
   const overlaps = [];
+  // Content scrolling under a fixed/sticky bar is normal when the page leaves room to scroll it clear of the bar.
+  const pinned = (el) => { for (let n = el; n && n !== document.body; n = n.parentElement) { const p = getComputedStyle(n).position; if (p === 'fixed' || p === 'sticky') return n; } return null; };
+  const scrollH = Math.max(doc.scrollHeight, document.body.scrollHeight);
+  const reachable = (flow, bar) => { const fr = flow.getBoundingClientRect(), br = bar.getBoundingClientRect();
+    return br.top > H / 2 ? fr.bottom + scrollY <= scrollH - br.height + 2 : fr.top + scrollY >= br.height - 2; };
+  // Inside an inner scroll box (e.g. main{overflow-y:auto} above a fixed tab bar): the part past the box edge is not
+  // painted there, and scrolling the box brings it into view, provided the box itself stays clear of the bar.
+  const scrolledOut = (flow, bar) => { const br = bar.getBoundingClientRect();
+    for (let n = flow.parentElement; n && n !== document.body; n = n.parentElement) { const s = getComputedStyle(n);
+      if (/(auto|scroll)/.test(s.overflowY) && n.scrollHeight > n.clientHeight + 2) { const cr = n.getBoundingClientRect();
+        return br.top > H / 2 ? cr.bottom <= br.top + 2 : cr.top >= br.bottom - 2; } }
+    return false; };
   for (let i = 0; i < boxes.length && overlaps.length < 15; i++) for (let j = i + 1; j < boxes.length && overlaps.length < 15; j++) {
     const a = boxes[i], b = boxes[j];
     if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
+    const pa = pinned(a.el), pb = pinned(b.el);
+    if (pa !== pb && (pa || pb) && (reachable(pa ? b.el : a.el, pa || pb) || scrolledOut(pa ? b.el : a.el, pa || pb))) continue;
     const x = Math.min(a.r.right, b.r.right) - Math.max(a.r.left, b.r.left), y = Math.min(a.r.bottom, b.r.bottom) - Math.max(a.r.top, b.r.top);
     if (x > 4 && y > 4 && x * y > 0.2 * Math.min(a.r.width * a.r.height, b.r.width * b.r.height)) {
       const top = document.elementFromPoint(Math.max(a.r.left, b.r.left) + x / 2, Math.max(a.r.top, b.r.top) + y / 2);
       if (top && (a.el.contains(top) || b.el.contains(top) || top.contains(a.el) || top.contains(b.el))) overlaps.push({ a: label(a.el), at: text(a.el), b: label(b.el), bt: text(b.el) });
     }
+  }
+  // A bottom bar that the page never scrolls clear of: the last content stays hidden behind it.
+  for (const bar of [...document.body.querySelectorAll('*')].filter((n) => vis(n) && getComputedStyle(n).position === 'fixed')) {
+    const br = bar.getBoundingClientRect();
+    if (br.top < H / 2 || br.width < W / 2 || overlaps.length >= 15) continue;
+    const flow = leaves.filter((el) => !bar.contains(el) && !pinned(el));
+    const last = flow.reduce((m, el) => (el.getBoundingClientRect().bottom > (m ? m.getBoundingClientRect().bottom : -1) ? el : m), null);
+    if (last && !scrolledOut(last, bar) && last.getBoundingClientRect().bottom + scrollY > scrollH - br.height + 2)
+      overlaps.push({ a: label(bar), at: '화면 아래 고정 영역', b: label(last), bt: text(last) + ' (끝까지 내려도 가려짐)' });
   }
   if (overlaps.length) defects.push({ kind: 'overlap', count: overlaps.length, items: overlaps.slice(0, 10) });
   // Contrast (WCAG): text colour vs. the first opaque background up the tree. Skips text over images/gradients.

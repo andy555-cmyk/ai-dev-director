@@ -193,3 +193,46 @@ def test_demo_data_must_be_versioned():
     p['demo_data'] = {'members': []}
     with pytest.raises(planning.PlanError, match='demo_data'):
         planning.validate(p)
+
+
+def test_docs_only_task_skips_model_judge(tmp_path, monkeypatch):
+    h = Harness(tmp_path, monkeypatch)
+    calls = []
+    h.runner.judge = lambda goal, report, workdir: calls.append(goal) or h.judge(goal, report, workdir)
+    r = h.runner
+    d = r.run(r.start(str(tmp_path / 'app'), '조기축구회 출석 앱')['delivery_id'])
+    r.approve(d['delivery_id'], 'plan', plan_hash=d['plan_hash'])
+    r.run(d['delivery_id'])
+    r.approve(d['delivery_id'], 'screen')
+    r.run(d['delivery_id'])
+    assert not any('T004' in g for g in calls)          # T004 only writes README.md
+    assert any('최종 검수' in g for g in calls)
+
+
+def test_release_feedback_fixes_and_repacks(tmp_path, monkeypatch):
+    h = Harness(tmp_path, monkeypatch)
+    r = h.runner
+    d = r.run(r.start(str(tmp_path / 'app'), '조기축구회 출석 앱')['delivery_id'])
+    r.approve(d['delivery_id'], 'plan', plan_hash=d['plan_hash'])
+    r.run(d['delivery_id']); r.approve(d['delivery_id'], 'screen')
+    d = r.run(d['delivery_id'])
+    assert d['phase'] == 'WAIT_RELEASE_APPROVAL'
+    first_zip = d['release']['worktree']
+    d = r.feedback(d['delivery_id'], '요약 화면에 null 글자가 보임')
+    assert d['phase'] == 'PACKAGING' and d['release'] is None
+    with pytest.raises(ValueError):
+        r.approve(d['delivery_id'], 'release')
+    d = r.run(d['delivery_id'])
+    assert d['phase'] == 'WAIT_RELEASE_APPROVAL' and d['release']['worktree'] != first_zip
+    assert h.builds[-1] == ('OWNER', True, '요약 화면에 null 글자가 보임')
+
+
+def test_extra_attempts_are_recorded_outside_plan_tasks(tmp_path, monkeypatch):
+    h = Harness(tmp_path, monkeypatch)
+    r = h.runner
+    d = r.run(r.start(str(tmp_path / 'app'), '조기축구회 출석 앱')['delivery_id'])
+    r._record_attempt(d, 'OWNER', {'run_id': 'RUN-1', 'kind': 'fix'})
+    r._record_attempt(d, 'OWNER', {'run_id': 'RUN-1', 'final_state': 'PASS'}, update=True)
+    fresh = r._need(d['delivery_id'])
+    assert fresh['extra_attempts']['OWNER'] == [{'run_id': 'RUN-1', 'kind': 'fix', 'final_state': 'PASS'}]
+    assert 'OWNER' not in fresh['tasks']

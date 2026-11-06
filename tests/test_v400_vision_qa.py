@@ -1,3 +1,4 @@
+import pytest
 """v4 RUN&SEE: verdict parsing and the fail-closed screen gate (no CLI, no browser)."""
 from core import vision_qa as v
 
@@ -42,3 +43,22 @@ def test_judge_prompt_carries_taste_and_measurements():
 def test_measure_rejects_missing_node(monkeypatch, tmp_path):
     monkeypatch.setattr(v.shutil, 'which', lambda name: None)
     assert v.measure('http://127.0.0.1:1/', str(tmp_path))['ok'] is False
+
+
+def _chrome():
+    import os
+    return any(os.path.exists(p) for p in ('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/usr/bin/google-chrome'))
+
+
+@pytest.mark.skipif(not _chrome(), reason='needs Chrome')
+def test_fixed_bar_overlap_only_when_content_stays_hidden(tmp_path):
+    from pathlib import Path
+    from core.static_serve import serve
+    from core import vision_qa
+    folder = Path(__file__).parent / 'fixtures' / 'see'
+    with serve(folder) as url:
+        r = vision_qa.measure(url, str(tmp_path), paths=['/bad.html', '/ok.html'], sizes='390x500', wait_ms=400)
+    kinds = {p['path']: [d for d in p['defects'] if d['kind'] == 'overlap'] for p in r['pages']}
+    texts = ' '.join(i['bt'] for d in kinds['/bad.html'] for i in d['items'])
+    assert '겹친 버튼' in texts and '끝까지 내려도 가려짐' in texts
+    assert kinds['/ok.html'] == []

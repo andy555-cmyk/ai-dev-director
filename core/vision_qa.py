@@ -23,7 +23,7 @@ SEE = ROOT / 'scripts' / 'qa' / 'see.mjs'
 TASTE = ROOT / 'taste' / 'design_rules.md'
 # Owner rejections live under data/ so app updates (which replace the engine folder) keep them.
 REJECTIONS = ROOT / 'data' / 'taste_rejections.jsonl'
-BLOCKING = {'blank_page', 'navigation_error', 'console_error', 'overlap', 'horizontal_scroll', 'broken_image',
+BLOCKING = {'blank_page', 'leaked_value', 'navigation_error', 'console_error', 'overlap', 'horizontal_scroll', 'broken_image',
             'off_screen', 'audit_failed', 'screenshot_failed'}
 VERDICT_KEYS = {'verdict', 'score', 'problems', 'summary'}
 
@@ -83,12 +83,15 @@ def judge_prompt(goal: str, report: Dict[str, Any], screens: List[str]) -> str:
         'ROADMAP/GOAL:\n' + goal[:3000] + '\n\n'
         '측정 도구가 찾은 결함(DOM 측정, 사실):\n' + _summary(report) + '\n\n'
         '대표 취향 규칙(어기면 문제로 적어라):\n' + (taste_rules() or '(없음)') + '\n\n'
+        '완료 조건 중 화면으로 볼 수 없는 것(문서·명령·테스트 결과)은 판정 대상이 아니다(다른 단계가 확인함).\n'
         '검수 범위: 「이번 작업」이 있으면 그 작업의 완료 조건만 본다. 뒤 작업에서 만들 기능·내용이 아직 없는 것은 '
         '문제가 아니다(적지 마라). 「최종 검수」면 앱 전체를 목표에 비춰 본다.\n'
         '판정 기준: 화면이 깨짐·겹침·잘림·빈 화면·읽기 힘든 작은 글자·이번 범위와 다른 화면이면 fail. '
         '사소한 미감 문제만 있으면 pass_with_notes. 첨부 이미지가 안 보이거나 비어 있으면 fail.\n'
         '첨부한 화면만 판정한다. 첨부하지 않은 화면·클릭 동작·저장 기능의 증거가 없다는 이유로 fail 하지 마라'
         '(이동·콘솔 오류는 측정 도구가 따로 확인했고, 기능은 자동 테스트가 확인했다).\n'
+        '캡처는 첫 화면 높이만 찍는다. 화면 아래·위에 고정된 메뉴 밑으로 내용이 이어지는 것은 스크롤하면 보이므로 문제가 아니다'
+        '(끝까지 내려도 가려지는지는 측정 도구가 확인한다. 측정 결함에 overlap이 없으면 가림 문제로 적지 마라).\n'
         '반드시 마지막에 아래 JSON 하나만 ```json 블록으로 출력:\n'
         '{"verdict":"pass|pass_with_notes|fail","score":0-100,'
         '"problems":[{"screen":"파일명","severity":"high|medium|low","what":"무엇이 문제","fix":"어떻게 고칠지"}],'

@@ -175,6 +175,10 @@ class DeliveryRunner:
         elif d['phase'] == 'WAIT_SCREEN_APPROVAL':
             d['pending_owner_fix'] = text
             d['phase'] = 'BUILDING'
+        elif d['phase'] == 'WAIT_RELEASE_APPROVAL':     # fix it, check the whole app again, re-pack
+            d['pending_owner_fix'] = text
+            d['owner_release_fix'] = True
+            d['release'], d['phase'] = None, 'PACKAGING'
         self.store.save(d)
         self.store.event(d, 'feedback', '대표 의견: ' + text[:200])
         return d
@@ -379,7 +383,10 @@ class DeliveryRunner:
 
     def _record_attempt(self, d, tid, row, update=False):
         fresh = self._need(d['delivery_id'])
-        attempts = fresh['tasks'][tid]['attempts']
+        if tid in fresh['tasks']:
+            attempts = fresh['tasks'][tid]['attempts']
+        else:                                   # FINAL / OWNER fixes are not plan tasks: keep them apart
+            attempts = fresh.setdefault('extra_attempts', {}).setdefault(tid, [])
         if update and attempts and attempts[-1].get('run_id') == row.get('run_id'):
             attempts[-1].update(row)
         else:
@@ -411,7 +418,11 @@ class DeliveryRunner:
             else:
                 report = self.measure(url, str(out), paths=routes, sizes=sizes, wait_ms=1500)
         verdict = None
-        if report.get('ok'):
+        docs_only = bool(task) and not final and all(str(x).lower().endswith(('.md', '.txt')) for x in task.get('allowed_paths') or ['x'])
+        if report.get('ok') and docs_only:     # nothing on screen changed: measured defects still gate, no model judge
+            verdict = {'verdict': 'pass', 'score': 100, 'problems': [], 'judge': 'none',
+                       'summary': '문서만 바꾼 작업이라 화면 측정만 했습니다', 'screens': []}
+        elif report.get('ok'):
             if task and not final:
                 goal = ('%s\n이번 작업: %s %s\n내용: %s\n완료 조건: %s\n(뒤에 남은 작업이 더 있음: 지금은 이 범위만 판정)' % (
                     d['goal'], task.get('id', ''), task.get('title', ''), str(task.get('detail', ''))[:800],
@@ -446,6 +457,20 @@ class DeliveryRunner:
         wt = d.get('last_accepted')
         if not wt or not Path(wt).is_dir():
             return self._end(d, 'FAILED', '완성된 작업본이 없습니다')
+        if d.get('owner_release_fix'):
+            spec = self._spec(d)
+            pseudo = {'id': 'OWNER', 'title': '대표 의견 반영', 'allowed_paths': sorted({p for t in spec['tasks'] for p in t['allowed_paths']}),
+                      'screens': [s['id'] for s in spec['screens']]}
+            fixed, why = self._build(d, pseudo, fix={'reasons': ['대표 의견: ' + d.get('pending_owner_fix', '')], 'verdict': None}, base=wt)
+            d = self._need(d['delivery_id'])
+            if not fixed:
+                d['resume_phase'] = 'PACKAGING'
+                return self._end(d, 'FAILED', '대표 의견 반영 실패: ' + why[:300])
+            d['last_accepted'], wt = fixed, fixed
+            d.pop('owner_release_fix', None)
+            d.pop('pending_owner_fix', None)
+            self.store.save(d)
+            self.store.event(d, 'done', '대표 의견을 반영했습니다')
         gate = self._see(d, None, wt, 'final', final=True)
         if not gate['passed']:
             tries = d.get('final_fix_tries', 0)
