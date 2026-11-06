@@ -28,6 +28,15 @@ def health():
         return False
 
 
+def open_screen():
+    # `open` hands the URL to the default browser and brings it forward; webbrowser.open can stay silent when the
+    # launcher runs detached from Finder.
+    try:
+        subprocess.run(['/usr/bin/open', URL], timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        webbrowser.open(URL)
+
+
 def main():
     resources, state = map(Path, sys.argv[1:3])
     state.mkdir(parents=True, exist_ok=True)
@@ -36,13 +45,15 @@ def main():
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             if health():
-                webbrowser.open(URL)
-            print('이미 실행 중입니다. 기존 터미널 창을 확인하세요.', flush=True)
+                open_screen()
+                print('이미 실행 중입니다. 화면을 열었습니다.', flush=True)
+            else:
+                print('이미 시작하는 중입니다. 잠시 뒤 화면이 열립니다.', flush=True)
             return 0
         with socket.socket() as probe:
             if probe.connect_ex(('127.0.0.1', 8081)) == 0:
                 if health():
-                    webbrowser.open(URL)
+                    open_screen()
                     print('기존 AI DEV DIRECTOR 화면을 열었습니다.', flush=True)
                     return 0
                 print('8081 포트가 사용 중입니다. 해당 프로그램을 종료한 뒤 다시 실행하세요.')
@@ -82,7 +93,7 @@ def main():
                 if server.poll() is not None:
                     return
                 if health():
-                    webbrowser.open(URL)
+                    open_screen()
                     return
                 time.sleep(0.5)
             print('서버 실행을 확인하지 못했습니다. 터미널의 오류를 확인하세요.', flush=True)

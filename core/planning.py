@@ -62,6 +62,7 @@ def plan_prompt(goal: str, taste: str, feedback: Optional[List[str]] = None) -> 
         '- 각 작업: allowed_paths(바꿀 파일 정확히), required_outputs(반드시 생기는 파일), acceptance(검사 가능한 문장), '
         'screens(이 작업 뒤 확인할 화면 id), depends_on\n'
         '- 마지막 작업은 README.md(실행 방법·기능 설명·백업 방법)\n'
+        '- 저장 데이터는 store.js의 KEY(app-data-v1)에 data 문서 구조 그대로 둔다. 화면 검수는 demo_data를 그 자리에 넣고 채워진 화면을 본다\n'
         '- 화면 문구 끝에 마침표 금지, 최소 13px 글자, 휴대전화 390px 폭에서도 쓰기 좋게\n\n'
         '와이어프레임: 화면마다 하나의 완결된 HTML(인라인 CSS만, 스크립트·외부 파일 없음). 실제 한국어 문구와 '
         '예시 데이터(가상 이름)로 배치를 보여준다. 회색 상자만 있는 그림 금지. 1440px와 390px 모두 깨지지 않게\n\n'
@@ -74,7 +75,8 @@ def plan_prompt(goal: str, taste: str, feedback: Optional[List[str]] = None) -> 
         '"screens":[{"id":"S01","name":"홈","route":"/","purpose":"..."}],'
         '"tasks":[{"id":"T001","title":"...","detail":"구현할 내용","depends_on":[],'
         '"allowed_paths":["app/main.js"],"required_outputs":["app/main.js"],"acceptance":["..."],"screens":["S01"]}],'
-        '"wireframes":{"S01":"<!doctype html>..."}}\n'
+        '"wireframes":{"S01":"<!doctype html>..."},'
+        '"demo_data":{"version":1,"...":"data 문서의 저장 구조 그대로, 모든 화면이 채워 보일 만큼의 예시(가상 이름)"}}\n'
     )
 
 
@@ -136,6 +138,9 @@ def validate(plan: Dict[str, Any]) -> Dict[str, Any]:
         order_ids = topo_order(tasks)            # raises on a cycle
         if order_ids[-1:] and 'README.md' not in sum((list(t.get('allowed_paths') or []) for t in tasks), []):
             problems.append('README.md를 쓰는 작업이 없음')
+    demo = plan.get('demo_data')
+    if demo is not None and (not isinstance(demo, dict) or demo.get('version') != 1 or len(json.dumps(demo)) > 200_000):
+        problems.append('demo_data는 version 1인 저장 데이터 객체여야 함(200KB 이하)')
     wf = plan.get('wireframes') or {}
     for sid in screen_ids:
         if not isinstance(wf.get(sid), str) or '<' not in wf.get(sid, ''):
@@ -170,6 +175,8 @@ def write_plan(plan: Dict[str, Any], folder: Path) -> Dict[str, Any]:
     (spec / 'tasks.json').write_text(json.dumps({'schema_version': 1, 'title': plan.get('title', ''),
                                                  'summary': plan.get('summary', ''), 'screens': plan['screens'],
                                                  'tasks': tasks}, ensure_ascii=False, indent=2), encoding='utf-8')
+    if isinstance(plan.get('demo_data'), dict):
+        (spec / 'demo_data.json').write_text(json.dumps(plan['demo_data'], ensure_ascii=False, indent=2), encoding='utf-8')
     wf = folder / 'wireframes'
     wf.mkdir(exist_ok=True)
     for s in plan['screens']:

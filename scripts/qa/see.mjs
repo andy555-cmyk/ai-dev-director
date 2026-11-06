@@ -1,10 +1,11 @@
 // AI DEV DIRECTOR v4 "eyes": open a running app in headless Chrome, capture each viewport and measure layout defects.
 // Zero dependencies: Node 22+ global WebSocket + Chrome DevTools Protocol.
 // usage: node see.mjs --url http://127.0.0.1:5173/ --out DIR [--paths /,/settings] [--sizes 1440x900,390x844]
-//        [--chrome PATH] [--wait 1500] [--min-font 12]
+//        [--chrome PATH] [--wait 1500] [--min-font 12] [--seed demo.json --seed-key app-data-v1]
+// --seed: put example data into localStorage before the page loads, so filled screens are checked, not only empty ones.
 // stdout: one JSON report. Exit 0 when the report was produced (defects are data, not a crash), 2 on usage/launch errors.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -17,6 +18,8 @@ const paths = (args.paths || base.pathname || '/').split(',').map((p) => p.trim(
 const sizes = (args.sizes || '1440x900,390x844').split(',').map((s) => s.split('x').map(Number)).filter(([w, h]) => w > 0 && h > 0);
 const waitMs = Math.min(Number(args.wait || 1500), 15000);
 const minFont = Number(args['min-font'] || 13);
+const seed = args.seed ? readFileSync(args.seed, 'utf8') : null;
+const seedKey = args['seed-key'] || 'app-data-v1';
 const chrome = args.chrome || ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium', '/usr/bin/google-chrome', '/usr/bin/chromium'].find(existsSync);
 if (!chrome) fail('Chrome not found');
 mkdirSync(args.out, { recursive: true });
@@ -93,13 +96,14 @@ for (const path of paths) for (const [w, h] of sizes) {
   const { sessionId } = await cdp.send('Target.attachToTarget', { targetId, flatten: true });
   const s = (m, p) => cdp.send(m, p, sessionId);
   await s('Runtime.enable'); await s('Log.enable'); await s('Page.enable');
+  if (seed) await s('Page.addScriptToEvaluateOnNewDocument', { source: `try{localStorage.setItem(${JSON.stringify(seedKey)}, ${JSON.stringify(seed)})}catch(e){}` });
   await s('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: w < 600 });
   const mark = cdp.events.length;
   let navError = null;
   try { const nav = await s('Page.navigate', { url }); navError = nav.errorText || null; } catch (e) { navError = e.message; }
   await new Promise((r) => setTimeout(r, waitMs));
   const ev = cdp.events.slice(mark).filter((e) => e.sessionId === sessionId);
-  const consoleErrors = ev.filter((e) => (e.method === 'Runtime.exceptionThrown') || (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error') || (e.method === 'Log.entryAdded' && e.params.entry.level === 'error'))
+  const consoleErrors = ev.filter((e) => (e.method === 'Runtime.exceptionThrown') || (e.method === 'Runtime.consoleAPICalled' && e.params.type === 'error') || (e.method === 'Log.entryAdded' && e.params.entry.level === 'error' && !/\/favicon\.ico(\?|$)/.test(e.params.entry.url || '')))
     .slice(0, 20).map((e) => (e.params.exceptionDetails ? (e.params.exceptionDetails.exception?.description || e.params.exceptionDetails.text) : e.params.entry ? e.params.entry.text : e.params.args.map((a) => a.value ?? a.description).join(' ')).slice(0, 300));
   let result = { defects: [] };
   try { const r = await s('Runtime.evaluate', { expression: '(' + audit.toString() + ')(' + minFont + ')', returnByValue: true }); result = r.result.value || result; } catch (e) { result.defects.push({ kind: 'audit_failed', count: 1, items: [{ error: e.message }] }); }

@@ -8,7 +8,7 @@ import subprocess
 import sys
 import zipfile
 
-VERSION = '0.3.7'
+VERSION = '0.4.0'
 root = Path(__file__).resolve().parents[2]
 out = root.parent / 'macos-release'
 volume = out / 'volume'
@@ -40,7 +40,7 @@ with (contents / 'Info.plist').open('wb') as f:
         'CFBundleExecutable':'launcher','LSMinimumSystemVersion':'10.15',
         'NSHighResolutionCapable':True}, f)
 (contents / 'PkgInfo').write_bytes(b'APPL????')
-readme = '''AI DEV DIRECTOR · macOS Preview 0.3.7
+readme = '''AI DEV DIRECTOR · macOS Preview 0.4.0
 
 설치 / 업데이트
 1. AI Dev Director.app을 응용 프로그램(Applications) 폴더로 복사합니다.
@@ -49,6 +49,14 @@ readme = '''AI DEV DIRECTOR · macOS Preview 0.3.7
 4. 연결 진단에서 Python, Git, AI CLI 설치 및 구독 로그인을 확인합니다.
 5. 작업 화면으로 돌아가 프로젝트 폴더와 역할을 선택합니다.
 6. 종료는 화면의 시스템 중지입니다. Option 키를 누른 채 앱을 열면 예전처럼 터미널 창에서 실행합니다.
+
+0.4.0 변경 사항 (한 줄로 앱 만들기)
+- 상단 「앱 만들기」: 만들 앱 한 줄과 폴더만 적으면 기획 → 구현 → 실제 화면 확인 → 수정 → 출시 묶음까지 진행
+- 대표 확인은 세 번: 기획(와이어프레임 그림·기획 문서 4종), 중간 화면, 출시
+- 작업마다 실제로 켜 보고 PC·휴대전화 크기로 캡처, 겹침·잘림·작은 글자·콘솔 오류를 재고 Codex가 그림을 보고 판정. 불합격이면 스스로 두 번까지 고침
+- 남긴 의견은 쌓여서 다음 기획·구현·판정에 반영(업데이트해도 남음)
+- 명령줄: director.py deliver start / status / approve / feedback
+- 콘솔 서버 동시 접속 한도를 늘려 아이콘이 끊기던 문제 수정, HUD 작은 글자 11~12px로
 
 0.3.7 변경 사항 (헤이데이 맥 보완)
 - 터미널 창 없이 실행. 로그인 셸의 PATH를 읽어 npm·Homebrew로 깐 CLI도 Finder 실행에서 찾음
@@ -161,8 +169,8 @@ with zipfile.ZipFile(volume / 'Source_Code.zip', 'w', zipfile.ZIP_DEFLATED) as a
     for rel in sorted(set(files)):
         if rel and (root / rel).is_file() and rel not in ("docs/design/hud-comparison.jpg", "docs/design/hud-core-comparison.jpg"):
             archive.write(root / rel, 'ai-dev-director/' + rel)
-build_info = {'upstream_commit':'a463e7886666794101f6a6c7542abdcf9c9b6c0b','hayday_mac_patch':'0.3.7',
-              'version':VERSION,'macos_runtime_tested':True,'login_credential_flow_tested':False,'related_tests_passed':675,'known_failing_upstream':['test_v014_qualification::test_a2_permission_guard_hook_blocks_escapes'],'connection_badges_tested':True,'circuit_hud_tested':True,'grok_full_pipeline_tested':True,'real_four_cli_pipeline_passed':True,'grok_hud_regression_tested':True,'grok_cli_response_tested':True,'grok_web_research_tested':True,'signed':False,'python_bundled':False}
+build_info = {'upstream_commit':'a463e7886666794101f6a6c7542abdcf9c9b6c0b','hayday_mac_patch':'0.4.0',
+              'version':VERSION,'macos_runtime_tested':True,'login_credential_flow_tested':False,'related_tests_passed':688,'known_failing_upstream':['test_v014_qualification::test_a2_permission_guard_hook_blocks_escapes'],'connection_badges_tested':True,'circuit_hud_tested':True,'grok_full_pipeline_tested':True,'real_four_cli_pipeline_passed':True,'grok_hud_regression_tested':True,'grok_cli_response_tested':True,'grok_web_research_tested':True,'signed':False,'python_bundled':False}
 (volume / 'BUILD_INFO.json').write_text(json.dumps(build_info, indent=2))
 dmg = out / 'AI_Dev_Director_macOS_Preview.dmg'
 if sys.platform == 'darwin':

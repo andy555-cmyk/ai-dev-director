@@ -17,7 +17,7 @@
    <label for="dlv-folder">만들 폴더</label><div class="dlv-folder"><input id="dlv-folder" placeholder="/Users/나/dev/새앱" required><button type="button" id="dlv-pick">고르기</button></div>
    <button type="submit" id="dlv-start" class="dlv-primary">기획 시작</button><p class="dlv-hint">대표 확인은 세 번뿐 · 기획, 중간 화면, 출시</p></form>
    <h3 class="dlv-sub">만든 앱</h3><ul id="dlv-list"></ul></aside>
-   <section class="dlv-main" id="dlv-main" aria-live="polite"><p class="dlv-empty">왼쪽에 한 줄을 적으면 기획부터 시작합니다</p></section></div>
+   <section class="dlv-main" id="dlv-main" aria-live="polite"><p class="dlv-empty">만들 앱 한 줄을 적으면 기획부터 시작합니다</p></section></div>
   <p id="dlv-msg" role="status"></p>`;
   document.body.appendChild(dlg);
   $('dlv-close').onclick=()=>dlg.close();
@@ -39,7 +39,7 @@
   return `<div class="dlv-act"><span class="dlv-run"><i></i>${esc(LABEL[d.phase]||d.phase)}</span><button type="button" data-act="stop">멈추기</button></div>`;
  }
  function detail(d){
-  const wf=Object.entries(d.wireframes||{}).map(([k,v])=>`<figure>${shots(v.slice(0,1),'dlv-wire')}<figcaption>${esc(k)}</figcaption></figure>`).join('');
+  const wf=Object.entries(d.wireframes||{}).map(([k,v])=>`<figure>${shots(v.slice(0,1),'dlv-wire')}<figcaption>${esc((d.screen_names||{})[k]||k)}</figcaption></figure>`).join('');
   const docs=Object.entries(d.plan_docs||{}).map(([k,v])=>`<details><summary>${esc(DOC[k]||k)}</summary><pre>${esc(v)}</pre></details>`).join('');
   const tasks=(d.tasks||[]).map(t=>`<li class="t-${esc(t.status)}"><b>${esc(t.id)}</b><span>${esc(t.title)}</span><em>${esc(TASK[t.status]||t.status)}${t.screen_passed===false?' · 화면 다시':''}</em>${t.shots?.length?`<div class="dlv-thumbs">${shots(t.shots)}</div>`:''}</li>`).join('');
   const ev=(d.events||[]).slice(-14).reverse().map(e=>`<li><time>${esc((e.at||'').slice(11,16))}</time>${esc(e.text)}</li>`).join('');
@@ -66,12 +66,12 @@
   clearTimeout(timer);
   try{const list=(await api('/ops/deliveries')).deliveries||[];if(!current&&list[0])current=list[0].delivery_id;
    $('dlv-list').innerHTML=list.map(d=>`<li><button type="button" data-id="${esc(d.delivery_id)}" class="${d.delivery_id===current?'on':''}"><b>${esc(d.title||d.goal)}</b><span>${esc(LABEL[d.phase]||d.phase)} · ${d.progress.done}/${d.progress.total}</span></button></li>`).join('')||'<li class="dlv-none">아직 없음</li>';
-   if(current){const open=[...document.querySelectorAll('#dlv-main details[open]')].map(x=>x.querySelector('summary').textContent);const fb=$('dlv-fbtext')?.value||'';const d=await api('/ops/deliveries/'+encodeURIComponent(current));$('dlv-main').innerHTML=detail(d);
+   if(current){const open=[...document.querySelectorAll('#dlv-main details[open]')].map(x=>x.querySelector('summary').textContent);const fb=$('dlv-fbtext')?.value||'';const d=await api('/ops/deliveries/'+encodeURIComponent(current));$('dlv-main').innerHTML=detail(d);document.querySelector('#dlv-panel .dlv-body').classList.add('has-current');
     document.querySelectorAll('#dlv-main details').forEach(x=>{if(open.includes(x.querySelector('summary').textContent))x.open=true;});if($('dlv-fbtext'))$('dlv-fbtext').value=fb;}
   }catch(e){msg(e.message);}
   if($('dlv-panel').open)timer=setTimeout(refresh,4000);
  }
  document.addEventListener('click',e=>{const b=e.target.closest('#dlv-list button[data-id]');if(b){current=b.dataset.id;refresh();return;}const a=e.target.closest('#dlv-main button[data-act]');if(a)act(a);});
- function init(){const dlg=build();const nav=document.querySelector('.top-actions');const btn=document.createElement('button');btn.type='button';btn.id='btn-deliver';btn.textContent='앱 만들기';btn.title='한 줄로 앱 만들기 · 기획부터 출시 묶음까지';nav.insertBefore(btn,nav.children[2]||null);btn.onclick=()=>{dlg.showModal();refresh();};if(location.hash==='#deliver'){dlg.showModal();refresh();}}
+ function init(){const dlg=build();const nav=document.querySelector('.top-actions');const btn=document.createElement('button');btn.type='button';btn.id='btn-deliver';btn.textContent='앱 만들기';btn.title='한 줄로 앱 만들기 · 기획부터 출시 묶음까지';nav.insertBefore(btn,nav.children[2]||null);btn.onclick=()=>{dlg.showModal();refresh();};if(location.hash==='#deliver')setTimeout(()=>{if(!dlg.open){dlg.showModal();refresh();}},400);}
  document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init):init();
 })();

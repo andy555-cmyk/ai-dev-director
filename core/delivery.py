@@ -304,7 +304,7 @@ class DeliveryRunner:
     def _order(self, d, task, fix=None):
         from schemas.order import OrderSchema
         plan_dir = Path(d['plan_dir'])
-        refs = [str(plan_dir / 'spec' / (k + '.md')) for k in planning.DOCS] + [str(plan_dir / 'spec' / 'tasks.json')]
+        refs = [str(plan_dir / 'spec' / (k + '.md')) for k in planning.DOCS] + [self._tasks_md(d)]
         owner = d.get('pending_owner_fix')
         context = ('정적 웹앱(빌드 도구 없음). 기획 문서는 reference_paths에 있다. 화면 주소는 해시(#/...).\n'
                    '대표 취향 규칙:\n' + vision_qa.taste_rules()[:3500])
@@ -324,6 +324,25 @@ class DeliveryRunner:
                            required_outputs=list(task.get('required_outputs') or []), reference_paths=refs,
                            acceptance_criteria=list(task.get('acceptance') or []) + ['node --test 통과'],
                            context=context, max_files_changed=max(5, len(task['allowed_paths'])), max_diff_lines=800)
+
+    def _tasks_md(self, d) -> str:
+        """The Builder reads only .md/.txt/.docx references: a readable copy of tasks.json outside the signed plan."""
+        spec = self._spec(d)
+        rows = ['# %s 작업표' % spec.get('title', ''), '', '## 화면']
+        rows += ['- %s %s `#%s`: %s' % (s['id'], s.get('name', ''), s['route'], s.get('purpose', '')) for s in spec['screens']]
+        rows += ['', '## 작업(순서대로)']
+        for t in spec['tasks']:
+            rows += ['', '### %s %s' % (t['id'], t['title']), t.get('detail', ''),
+                     '- 바꿀 파일: ' + ', '.join(t.get('allowed_paths') or []),
+                     '- 확인할 화면: ' + ', '.join(t.get('screens') or []),
+                     '- 완료 조건: ' + ' / '.join(t.get('acceptance') or [])]
+        demo = Path(d['plan_dir']) / 'spec' / 'demo_data.json'
+        if demo.is_file():
+            rows += ['', '## 저장 데이터 예시(localStorage app-data-v1, 화면 검수는 이 데이터를 넣고 본다)', '```json',
+                     demo.read_text(encoding='utf-8')[:6000], '```']
+        path = self.store.folder(d['delivery_id']) / 'tasks_for_builder.md'
+        path.write_text('\n'.join(rows) + '\n', encoding='utf-8')
+        return str(path)
 
     def _build(self, d, task, fix=None, base=None):
         """One task (or one fix) through the existing Orchestrator, with build retries. Returns (worktree, why)."""
@@ -378,16 +397,34 @@ class DeliveryRunner:
         out = self.store.folder(d['delivery_id']) / 'evidence' / tag / datetime.now().strftime('%H%M%S')
         sizes = '1440x900,1280x800,390x844' if final else '1440x900,390x844'
         routes = self._routes(d, None if final else (task or {}).get('screens'))
+        demo = Path(d['plan_dir']) / 'spec' / 'demo_data.json'
         with serve(worktree) as url:
-            report = self.measure(url, str(out), paths=routes, sizes=sizes, wait_ms=1500)
+            if demo.is_file():      # filled screens (example data) for every route + the empty home once
+                report = self.measure(url, str(out), paths=routes, sizes=sizes, wait_ms=1500, seed=str(demo))
+                empty = self.measure(url, str(out / 'empty'), paths=[routes[0]], sizes='390x844', wait_ms=1500)
+                if report.get('ok') and empty.get('ok'):
+                    for p in empty.get('pages', []):
+                        p['path'] = p['path'] + ' (빈 데이터)'
+                    report['pages'] = report.get('pages', []) + empty.get('pages', [])
+                elif not empty.get('ok'):
+                    report = empty
+            else:
+                report = self.measure(url, str(out), paths=routes, sizes=sizes, wait_ms=1500)
         verdict = None
         if report.get('ok'):
-            goal = '%s\n이번 작업: %s' % (d['goal'], (task or {}).get('title', '최종 검수'))
+            if task and not final:
+                goal = ('%s\n이번 작업: %s %s\n내용: %s\n완료 조건: %s\n(뒤에 남은 작업이 더 있음: 지금은 이 범위만 판정)' % (
+                    d['goal'], task.get('id', ''), task.get('title', ''), str(task.get('detail', ''))[:800],
+                    ' / '.join(task.get('acceptance') or [])))
+            else:
+                goal = '%s\n최종 검수: 앱 전체' % d['goal']
             verdicts = []
             pages = report.get('pages', [])
             for i in range(0, len(pages), 4):        # every screenshot is judged, four at a time
                 part = dict(report, pages=pages[i:i + 4])
-                verdicts.append(self.judge(goal, part, str(out)))
+                note = '\n(캡처 %d장 중 %d~%d번째 묶음: 이 묶음만 판정, 나머지 묶음은 따로 판정함)' % (
+                    len(pages), i + 1, min(i + 4, len(pages)))
+                verdicts.append(self.judge(goal + note, part, str(out)))
             verdict = _merge_verdicts(verdicts)
         gate = vision_qa.screen_gate(report, verdict)
         (out / 'gate.json').write_text(json.dumps({'report': report, 'gate': gate}, ensure_ascii=False, indent=2), encoding='utf-8')

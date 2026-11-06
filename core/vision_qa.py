@@ -29,7 +29,7 @@ VERDICT_KEYS = {'verdict', 'score', 'problems', 'summary'}
 
 
 def measure(url: str, out_dir: str, paths: Optional[List[str]] = None, sizes: str = '1440x900,390x844',
-            wait_ms: int = 2000, min_font: int = 13, timeout: float = 180.0) -> Dict[str, Any]:
+            wait_ms: int = 2000, min_font: int = 13, timeout: float = 180.0, seed: Optional[str] = None) -> Dict[str, Any]:
     node = shutil.which('node')
     if not node:
         return {'ok': False, 'error': 'Node.js가 없어 화면 검사를 못 합니다.'}
@@ -37,6 +37,8 @@ def measure(url: str, out_dir: str, paths: Optional[List[str]] = None, sizes: st
             '--wait', str(int(wait_ms)), '--min-font', str(int(min_font))]
     if paths:
         argv += ['--paths', ','.join(paths)]
+    if seed:
+        argv += ['--seed', str(seed)]
     try:
         res = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
     except subprocess.TimeoutExpired:
@@ -81,8 +83,12 @@ def judge_prompt(goal: str, report: Dict[str, Any], screens: List[str]) -> str:
         'ROADMAP/GOAL:\n' + goal[:3000] + '\n\n'
         '측정 도구가 찾은 결함(DOM 측정, 사실):\n' + _summary(report) + '\n\n'
         '대표 취향 규칙(어기면 문제로 적어라):\n' + (taste_rules() or '(없음)') + '\n\n'
-        '판정 기준: 화면이 깨짐·겹침·잘림·빈 화면·읽기 힘든 작은 글자·목표와 다른 화면이면 fail. '
-        '사소한 미감 문제만 있으면 pass_with_notes. 증거가 부족하면 fail.\n'
+        '검수 범위: 「이번 작업」이 있으면 그 작업의 완료 조건만 본다. 뒤 작업에서 만들 기능·내용이 아직 없는 것은 '
+        '문제가 아니다(적지 마라). 「최종 검수」면 앱 전체를 목표에 비춰 본다.\n'
+        '판정 기준: 화면이 깨짐·겹침·잘림·빈 화면·읽기 힘든 작은 글자·이번 범위와 다른 화면이면 fail. '
+        '사소한 미감 문제만 있으면 pass_with_notes. 첨부 이미지가 안 보이거나 비어 있으면 fail.\n'
+        '첨부한 화면만 판정한다. 첨부하지 않은 화면·클릭 동작·저장 기능의 증거가 없다는 이유로 fail 하지 마라'
+        '(이동·콘솔 오류는 측정 도구가 따로 확인했고, 기능은 자동 테스트가 확인했다).\n'
         '반드시 마지막에 아래 JSON 하나만 ```json 블록으로 출력:\n'
         '{"verdict":"pass|pass_with_notes|fail","score":0-100,'
         '"problems":[{"screen":"파일명","severity":"high|medium|low","what":"무엇이 문제","fix":"어떻게 고칠지"}],'

@@ -62,6 +62,10 @@ def view(d: Dict[str, Any], events: bool = False) -> Dict[str, Any]:
                wireframes={k: [shot_url(d, s) for s in v[:2]] for k, v in (d.get('wireframe_shots') or {}).items()})
     if d.get('plan_dir'):
         out['plan_docs'] = plan_docs(d)
+        try:
+            out['screen_names'] = {sc['id']: sc.get('name', '') for sc in runner()._spec(d)['screens']}
+        except (OSError, ValueError, KeyError):
+            out['screen_names'] = {}
     if events:
         out['events'] = runner().store.events(d['delivery_id'], 60)
     return out

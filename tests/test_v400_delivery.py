@@ -83,7 +83,8 @@ class Harness:
         (wt / 'README.md').write_text('# 앱\n', encoding='utf-8')
         return str(wt), ''
 
-    def measure(self, url, out, paths=None, sizes='', wait_ms=0):
+    def measure(self, url, out, paths=None, sizes='', wait_ms=0, seed=None):
+        self.seeds = getattr(self, 'seeds', []) + [seed]
         Path(out).mkdir(parents=True, exist_ok=True)
         shot = Path(out) / 'home.png'
         shot.write_bytes(b'\x89PNG fake')
@@ -157,3 +158,38 @@ def test_store_rejects_bad_ids(tmp_path):
     for bad in ('../x', 'DLV-../../x', 'run-1'):
         with pytest.raises(ValueError):
             store.folder(bad)
+
+
+def test_builder_references_are_markdown(tmp_path, monkeypatch):
+    from core.builder_context import referenced_documents
+    h = Harness(tmp_path, monkeypatch)
+    r = h.runner
+    d = r.run(r.start(str(tmp_path / 'app'), '조기축구회 출석 앱')['delivery_id'])
+    order = delivery.DeliveryRunner._order(r, d, r._spec(d)['tasks'][0])
+    docs = referenced_documents(order)
+    assert len(docs) == 5 and any('T004' in v for v in docs.values())
+
+
+def test_demo_data_fills_screens_and_reaches_builder(tmp_path, monkeypatch):
+    h = Harness(tmp_path, monkeypatch)
+    orig = h.planner
+
+    def planner(goal, folder, taste='', feedback=None):
+        plan = sample_plan()
+        plan['demo_data'] = {'version': 1, 'members': [{'name': '가상 회원'}]}
+        return plan, planning.write_plan(planning.validate(plan), Path(folder))
+    h.runner.planner = planner
+    r = h.runner
+    d = r.run(r.start(str(tmp_path / 'app'), '조기축구회 출석 앱')['delivery_id'])
+    assert (Path(d['plan_dir']) / 'spec' / 'demo_data.json').is_file()
+    assert '가상 회원' in Path(r._tasks_md(d)).read_text(encoding='utf-8')
+    r.approve(d['delivery_id'], 'plan', plan_hash=d['plan_hash'])
+    r.run(d['delivery_id'])
+    assert any(s and s.endswith('demo_data.json') for s in h.seeds) and None in h.seeds   # filled + empty
+
+
+def test_demo_data_must_be_versioned():
+    p = sample_plan()
+    p['demo_data'] = {'members': []}
+    with pytest.raises(planning.PlanError, match='demo_data'):
+        planning.validate(p)
