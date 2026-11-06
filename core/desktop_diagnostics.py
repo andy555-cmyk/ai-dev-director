@@ -136,8 +136,12 @@ def collect(config):
         cfg = {r: {'provider': {'codex': 'openai', 'agy': 'antigravity'}.get(n, n)} for r, n in roles.items()}
         using, subs = effective(cfg, available)
         for sub in subs:
-            notices.append(sub['role'].upper() + ': ' + HUMAN[to_cli[sub['requested']]] + ' CLI가 없어 '
-                           + HUMAN[to_cli[sub['using']]] + '가 대신 맡습니다.')
+            asked, using_name = to_cli[sub['requested']], HUMAN[to_cli[sub['using']]]
+            if asked in {to_cli[p] for p in available}:
+                notices.append(sub['role'].upper() + ': ' + HUMAN[asked] + '가 다른 역할로 옮겨 '
+                               + using_name + '가 대신 맡습니다.')
+            else:
+                notices.append(sub['role'].upper() + ': ' + HUMAN[asked] + ' CLI가 없어 ' + using_name + '가 대신 맡습니다.')
         roles = {r: to_cli[p] for r, p in using.items()}
     for role, name in roles.items():
         if name == 'unknown':

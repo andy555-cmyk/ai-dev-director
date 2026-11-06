@@ -162,7 +162,7 @@ with zipfile.ZipFile(volume / 'Source_Code.zip', 'w', zipfile.ZIP_DEFLATED) as a
         if rel and (root / rel).is_file() and rel not in ("docs/design/hud-comparison.jpg", "docs/design/hud-core-comparison.jpg"):
             archive.write(root / rel, 'ai-dev-director/' + rel)
 build_info = {'upstream_commit':'a463e7886666794101f6a6c7542abdcf9c9b6c0b','hayday_mac_patch':'0.3.7',
-              'version':VERSION,'macos_runtime_tested':True,'login_credential_flow_tested':False,'related_tests_passed':668,'connection_badges_tested':True,'circuit_hud_tested':True,'grok_full_pipeline_tested':True,'real_four_cli_pipeline_passed':True,'grok_hud_regression_tested':True,'grok_cli_response_tested':True,'grok_web_research_tested':True,'signed':False,'python_bundled':False}
+              'version':VERSION,'macos_runtime_tested':True,'login_credential_flow_tested':False,'related_tests_passed':675,'known_failing_upstream':['test_v014_qualification::test_a2_permission_guard_hook_blocks_escapes'],'connection_badges_tested':True,'circuit_hud_tested':True,'grok_full_pipeline_tested':True,'real_four_cli_pipeline_passed':True,'grok_hud_regression_tested':True,'grok_cli_response_tested':True,'grok_web_research_tested':True,'signed':False,'python_bundled':False}
 (volume / 'BUILD_INFO.json').write_text(json.dumps(build_info, indent=2))
 dmg = out / 'AI_Dev_Director_macOS_Preview.dmg'
 if sys.platform == 'darwin':
