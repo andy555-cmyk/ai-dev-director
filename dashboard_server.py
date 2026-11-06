@@ -100,6 +100,9 @@ class DashboardServer(ThreadingHTTPServer):
     """
     allow_reuse_address = os.name != 'nt'
     daemon_threads = True
+    # Default backlog is 5: a page load (12 icons + scripts + polling) overflowed it on macOS and the browser saw
+    # ERR_CONNECTION_RESET / broken icons. Found by the v4 screen check (scripts/qa/see.mjs).
+    request_queue_size = 128
 
     def server_bind(self):
         if hasattr(socket, "SO_EXCLUSIVEADDRUSE"):

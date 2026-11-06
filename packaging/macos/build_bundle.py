@@ -26,7 +26,7 @@ for name in ('start.command', 'mac_bootstrap.py', 'install_support.py'):
 (resources / 'start.command').chmod(0o755)
 engine = resources / 'engine'
 engine.mkdir()
-for name in ('agents', 'console', 'core', 'schemas', 'scripts'):
+for name in ('agents', 'console', 'core', 'schemas', 'scripts', 'templates', 'taste'):
     shutil.copytree(root / name, engine / name,
                     ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
 for name in ('director.py','companion_server.py','dashboard_server.py','dashboard_i18n.py',

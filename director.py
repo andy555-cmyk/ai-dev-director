@@ -199,6 +199,86 @@ def mission(project: str, goal: str, mission_id: Optional[str], max_steps: Optio
     click.echo(f"=== Mission {mission_id}: {final['status']} ===")
 
 
+@cli.group()
+def deliver():
+    """v4: 한 줄로 앱 만들기 (기획 승인 -> 구현·화면 검수 -> 중간 화면 승인 -> 출시 승인)."""
+
+
+def _deliver_runner():
+    from core import delivery_service
+    return delivery_service.runner(notify=lambda text: click.echo(text))
+
+
+def _deliver_show(d):
+    click.echo(f"{d['delivery_id']}  {d['phase']}  {d.get('title') or ''}")
+    if d.get('reason'):
+        click.echo(f"  이유: {d['reason']}")
+    for tid, t in (d.get('tasks') or {}).items():
+        click.echo(f"  {tid} {t.get('status'):<9} {t.get('title')}")
+    if d['phase'] == 'WAIT_PLAN_APPROVAL':
+        click.echo(f"  기획 폴더: {d.get('plan_dir')}\n  승인: director.py deliver approve {d['delivery_id']} plan --plan-hash {d['plan_hash']}")
+    elif d['phase'] == 'WAIT_SCREEN_APPROVAL':
+        click.echo(f"  승인: director.py deliver approve {d['delivery_id']} screen")
+    elif d['phase'] == 'WAIT_RELEASE_APPROVAL':
+        click.echo(f"  출시 묶음: {(d.get('release') or {}).get('zip')}\n  승인: director.py deliver approve {d['delivery_id']} release")
+
+
+@deliver.command("start")
+@click.option("--project", "-p", required=True, help="앱을 만들 폴더(비어 있으면 웹 틀로 시작)")
+@click.option("--goal", "-g", required=True, help="만들 앱 한 줄")
+@click.option("--minutes", type=int, help="시간 예산(분, 기본 240)")
+def deliver_start(project, goal, minutes):
+    r = _deliver_runner()
+    d = r.start(project, goal, {'minutes': minutes} if minutes else None)
+    _deliver_show(r.run(d['delivery_id']))
+
+
+@deliver.command("approve")
+@click.argument("delivery_id")
+@click.argument("what", type=click.Choice(["plan", "screen", "release"]))
+@click.option("--plan-hash", help="기획 승인 때 화면에 보인 기획 해시")
+def deliver_approve(delivery_id, what, plan_hash):
+    r = _deliver_runner()
+    r.approve(delivery_id, what, plan_hash=plan_hash)
+    _deliver_show(r.run(delivery_id))
+
+
+@deliver.command("feedback")
+@click.argument("delivery_id")
+@click.argument("text")
+def deliver_feedback(delivery_id, text):
+    r = _deliver_runner()
+    r.feedback(delivery_id, text)
+    _deliver_show(r.run(delivery_id))
+
+
+@deliver.command("run")
+@click.argument("delivery_id")
+def deliver_run(delivery_id):
+    r = _deliver_runner()
+    r.resume(delivery_id)
+    _deliver_show(r.run(delivery_id))
+
+
+@deliver.command("stop")
+@click.argument("delivery_id")
+def deliver_stop(delivery_id):
+    _deliver_show(_deliver_runner().stop(delivery_id))
+
+
+@deliver.command("status")
+@click.argument("delivery_id", required=False)
+def deliver_status(delivery_id):
+    r = _deliver_runner()
+    if delivery_id:
+        _deliver_show(r._need(delivery_id))
+        for e in r.store.events(delivery_id, 15):
+            click.echo(f"    {e['at'][11:19]} {e['text']}")
+    else:
+        for d in r.store.all()[:20]:
+            click.echo(f"{d['delivery_id']}  {d['phase']:<22} {(d.get('title') or d['goal'])[:50]}")
+
+
 def _print_summary(summary: dict):
     run_id = summary.get("run_id", "UNKNOWN")
     final_state = summary.get("final_state", "UNKNOWN")

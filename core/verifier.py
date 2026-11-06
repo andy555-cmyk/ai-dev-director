@@ -165,6 +165,14 @@ class Verifier:
         if fail_match:
             counts["failed"] = int(fail_match.group(1))
 
+        # node:test TAP summary (v4 static web apps): '# pass 5' / '# fail 0'
+        tap_pass = re.search(r"^#\s+pass\s+(\d+)\s*$", output, re.M)
+        tap_fail = re.search(r"^#\s+fail\s+(\d+)\s*$", output, re.M)
+        if tap_pass and not pass_match:
+            counts["passed"] = int(tap_pass.group(1))
+        if tap_fail and not fail_match:
+            counts["failed"] = int(tap_fail.group(1))
+
         # Unittest pattern: 'Ran 4 tests in 0.001s'
         ran_match = re.search(r"Ran\s+(\d+)\s+tests", output)
         if ran_match:

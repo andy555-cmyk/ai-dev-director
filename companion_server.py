@@ -17,7 +17,7 @@ STATIC_FILES = {'/': 'index.html', '/console.js': 'console.js', '/console.css': 
                 '/grok.js': 'grok.js', '/grok.css': 'grok.css', '/polish.css': 'polish.css',
                 '/stage.css': 'stage.css', '/trinity.js': 'trinity.js', '/stage.js': 'stage.js',
                 '/setup': 'setup.html', '/setup.js': 'setup.js', '/setup.css': 'setup.css',
-                '/hud.css': 'hud.css', '/hud.js': 'hud.js', '/hud-backdrop.png': 'hud-backdrop.png', '/hud-core.png': 'hud-core.png',
+                '/hud.css': 'hud.css', '/delivery.js': 'delivery.js', '/delivery.css': 'delivery.css', '/hud.js': 'hud.js', '/hud-backdrop.png': 'hud-backdrop.png', '/hud-core.png': 'hud-core.png',
                 **{'/hud-icon-'+name+'.svg': 'hud-icon-'+name+'.svg'
                    for name in ('atom','circuit-tree','folder-open','paper-plane-right','shield-check',
                                 'link','play','stop','file-text','flask','cube','scales')}}
@@ -145,6 +145,30 @@ class CompanionHandler(d.DashboardHandler):
             using, substitutions = effective(config)
             return self._send_json({'roles': current(config), 'effective': using, 'substitutions': substitutions,
                                     'csrf': self.server.bridge_token})
+        if path == '/ops/deliveries' or path.startswith('/ops/deliveries/'):
+            from core import delivery_service as ds
+            parts = path.split('/')
+            try:
+                if len(parts) == 3:
+                    return self._send_json({'deliveries': ds.listing()})
+                ident = parts[3][:80]
+                if len(parts) >= 6 and parts[4] == 'file':
+                    f = ds.file_path(ident, '/'.join(parts[5:]))
+                    if not f:
+                        return self._send_json({'error': 'not found'}, 404)
+                    body = f.read_bytes()
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'image/png')
+                    self.send_header('Content-Length', str(len(body)))
+                    self.send_header('Cache-Control', 'private, max-age=3600')
+                    self.send_header('X-Content-Type-Options', 'nosniff')
+                    self.end_headers(); self.wfile.write(body); return
+                dlv = ds.runner().store.load(ident)
+                if not dlv:
+                    return self._send_json({'error': '알 수 없는 앱 만들기 기록입니다'}, 404)
+                return self._send_json(ds.view(dlv, events=True))
+            except ValueError as exc:
+                return self._send_json({'error': str(exc)}, 400)
         if path in STATIC_FILES:
             name = STATIC_FILES[path]
             body = (ROOT / 'console' / name).read_bytes()
@@ -291,6 +315,42 @@ class CompanionHandler(d.DashboardHandler):
                 return self._send_json(d.stop_missions(str(payload.get('reason', ''))[:300], payload.get('mission_id') or None, by=str(payload.get('by') or '사용자')[:40]))
             except (ValueError, TypeError) as exc:
                 return self._send_json({'error': str(exc)}, 400)
+        if self.path == '/ops/deliveries' or self.path.startswith('/ops/deliveries/'):
+            # v4 앱 만들기: start / approve / feedback / stop / resume. Work continues in a background thread.
+            if not d.is_request_origin_allowed(self.headers, self.server.server_address[1])[0] or not self.authorized():
+                return self._send_json({'error': 'local authenticated request required'}, 403)
+            from core import delivery_service as ds
+            try:
+                size = int(self.headers.get('Content-Length') or 0)
+                if not 0 <= size <= 8000:
+                    raise ValueError('요청이 너무 큽니다')
+                payload = json.loads(self.rfile.read(size)) if size else {}
+                if not isinstance(payload, dict):
+                    raise ValueError('object required')
+                r = ds.runner()
+                parts = self.path.split('/')
+                if len(parts) == 3:
+                    project = str(payload.get('project_path') or '').strip()
+                    if not project:
+                        raise ValueError('앱을 만들 폴더를 고르세요')
+                    dlv = r.start(project, str(payload.get('goal', '')))
+                else:
+                    ident, action = parts[3][:80], (parts[4] if len(parts) > 4 else '')
+                    if action == 'approve':
+                        dlv = r.approve(ident, str(payload.get('what', '')), plan_hash=payload.get('plan_hash'))
+                    elif action == 'feedback':
+                        dlv = r.feedback(ident, str(payload.get('text', '')))
+                    elif action == 'stop':
+                        dlv = r.stop(ident)
+                        return self._send_json(ds.view(dlv))
+                    elif action == 'resume':
+                        dlv = r.resume(ident)
+                    else:
+                        raise ValueError('알 수 없는 동작')
+                ds.advance(dlv['delivery_id'])
+                return self._send_json(ds.view(r.store.load(dlv['delivery_id'])), 202)
+            except (ValueError, TypeError, KeyError) as exc:
+                return self._send_json({'error': str(exc)[:300]}, 400)
         if self.path == '/ops/shutdown':
             # "시스템 중지" (2026-11-02): stop the companion from the console or from Solomon. Records, worktrees and
             # mission state stay on disk; resume_on_start picks interrupted missions up again when it is restarted.
@@ -384,6 +444,12 @@ def run():
     if (d.load_config().get('autonomy') or {}).get('resume_on_start'):
         import threading
         threading.Thread(target=d.resume_interrupted_missions, name='director-mission-resume', daemon=True).start()
+    def _resume_deliveries():
+        from core import delivery, delivery_service
+        for dlv in delivery_service.runner().store.all():
+            if dlv.get('phase') in delivery.ACTIVE and not dlv.get('stop_requested'):
+                delivery_service.advance(dlv['delivery_id'])
+    threading.Thread(target=_resume_deliveries, name='delivery-resume', daemon=True).start()
     server.stopping = False
     print('AI DEV × SOLOMON http://127.0.0.1:' + str(server.server_address[1]), flush=True)
     try:
