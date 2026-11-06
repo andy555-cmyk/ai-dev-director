@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# runtime state is never source
+data/*
+!data/.gitkeep
+runs/
+research/
+.director_worktrees/
+
+# local overrides
+companion.local.json
+*.log
+*.err
+*.token
+*.db
+*.sqlite3
+
+# Browser captures remain session-only visual QA evidence
+docs/design/hud-comparison.jpg
+docs/design/hud-core-comparison.jpg

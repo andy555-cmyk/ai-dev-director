@@ -1,0 +1,5 @@
+#!/bin/bash
+set -e
+CONTENTS="$(cd "$(dirname "$0")/.." && pwd)"
+# Open the executable document normally; no Terminal Apple Events permission is needed.
+exec /usr/bin/open -a Terminal "$CONTENTS/Resources/start.command"

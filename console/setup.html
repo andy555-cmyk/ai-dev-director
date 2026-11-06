@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>설치·연결 진단 · AI DEV DIRECTOR</title><link rel="stylesheet" href="/setup.css"><script src="/setup.js" defer></script></head>
+<body><main><header><div><p class="eyebrow">AI DEV DIRECTOR · macOS Preview 0.3.6</p><h1>설치·연결 진단</h1><p>설치부터 구독 로그인까지, 작업을 시작하기 전에 확인하세요.</p></div><a href="/">작업 화면으로 돌아가기 →</a></header>
+<section class="summary" aria-live="polite"><span id="badge">점검 전</span><h2 id="headline">연결 상태를 확인하세요.</h2><p id="checked">진단 버튼을 누르면 버전과 로그인 상태만 조회합니다. AI 생성 요청은 보내지 않습니다.</p><div class="actions"><button id="refresh" type="button">지금 진단하기</button><button id="export" type="button" disabled>진단 보고서 저장</button></div><p id="message" role="status"></p></section>
+<section><h2>실행 환경</h2><dl id="environment"><div><dt>상태</dt><dd>점검 전</dd></div></dl></section>
+<section><h2>AI 연결 상태</h2><p>계정 로그인 버튼을 누르면 공식 CLI 로그인 창이 열립니다. 아이디·비밀번호·인증 코드는 열린 터미널과 공식 브라우저에서 직접 입력하세요.</p><div id="providers" class="providers"></div><div class="login-followup"><p id="login-message" role="status" aria-live="polite"></p><button id="verify-login" type="button" hidden>로그인 완료 · 연결 확인</button></div><p class="login-note">앱은 로그인 정보와 인증 코드를 받거나 별도로 저장하지 않습니다. 이미 로그인된 계정은 각 CLI에서 관리하며 자동으로 로그아웃하지 않습니다.</p></section>
+<section><h2>역할 배정</h2><div id="roles" class="roles"></div><p>역할 변경은 작업 화면에서 진행하세요. 같은 AI가 구현·검수를 맡으면 독립성 경고가 표시됩니다.</p></section>
+<section id="issues"><h2>확인할 항목</h2><ul id="blockers"></ul><ul id="warnings"></ul></section>
+<footer><p>진단 보고서에는 계정 이메일, 인증 토큰, CLI 원문 출력, 프로젝트 코드와 경로를 포함하지 않습니다.</p><p>이 점검은 실제 AI 작업 성공·잔여 사용량·요금을 보장하지 않습니다. Antigravity와 Grok의 로그인은 CLI에서 직접 확인해야 합니다.</p><p>macOS에서 실행 확인 · 실제 AI 작업과 신규 로그인 완료는 별도 확인 · Apple 서명·공증 없음</p></footer>
+</main></body></html>
