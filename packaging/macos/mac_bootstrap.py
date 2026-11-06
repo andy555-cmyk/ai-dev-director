@@ -16,7 +16,7 @@ import venv
 import webbrowser
 from install_support import install_engine
 
-VERSION = '0.3.7'
+VERSION = '0.4.0'
 URL = 'http://127.0.0.1:8081'
 
 
@@ -31,6 +31,8 @@ def health():
 def open_screen():
     # `open` hands the URL to the default browser and brings it forward; webbrowser.open can stay silent when the
     # launcher runs detached from Finder.
+    if os.environ.get('BROWSER') == 'true':      # headless restart (reinstall/QA): no window on the owner's screen
+        return
     try:
         subprocess.run(['/usr/bin/open', URL], timeout=10)
     except (OSError, subprocess.SubprocessError):

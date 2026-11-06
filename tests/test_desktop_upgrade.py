@@ -165,3 +165,18 @@ def test_diagnostics_http_requires_token_and_local_origin(http_server, monkeypat
 
 def test_malformed_role_settings_rejected():
     with pytest.raises(ValueError):diag.collect({'head': 'not-a-mapping'})
+
+
+def test_same_version_new_build_replaces_engine(tmp_path):
+    source, state = tmp_path / 'src', tmp_path / 'state'
+    source.mkdir()
+    (source / 'a.txt').write_text('old')
+    (source / '.source-build-id').write_text('b1')
+    engine = installer().install_engine(source, state, '0.4.0')
+    assert (engine / 'a.txt').read_text() == 'old'
+    (source / 'a.txt').write_text('new')
+    installer().install_engine(source, state, '0.4.0')              # same build id: kept
+    assert (engine / 'a.txt').read_text() == 'old'
+    (source / '.source-build-id').write_text('b2')
+    engine = installer().install_engine(source, state, '0.4.0')      # new build of the same version: replaced
+    assert (engine / 'a.txt').read_text() == 'new'

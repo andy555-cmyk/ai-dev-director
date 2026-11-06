@@ -20,8 +20,11 @@ def install_engine(source, state, version):
         if backups:
             backups[-1].rename(engine)
     manifest = engine / '.desktop-build.json'
-    if manifest.exists() and json.loads(manifest.read_text()).get('version') == version:
-        return engine
+    build_id = (source / '.source-build-id').read_text().strip() if (source / '.source-build-id').is_file() else ''
+    if manifest.exists():
+        installed = json.loads(manifest.read_text())
+        if installed.get('version') == version and installed.get('build', '') == build_id:
+            return engine
     stage = Path(tempfile.mkdtemp(prefix='.engine-staging-', dir=state))
     backup = None
     try:
@@ -50,7 +53,7 @@ def install_engine(source, state, version):
                 else:
                     staged_dir.unlink()
             staged_dir.symlink_to(permanent, target_is_directory=True)
-        (stage / '.desktop-build.json').write_text(json.dumps({'version': version}))
+        (stage / '.desktop-build.json').write_text(json.dumps({'version': version, 'build': build_id}))
         if engine.exists():
             stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
             backup = state / 'backups' / ('engine-' + stamp)

@@ -33,6 +33,9 @@ for name in ('director.py','companion_server.py','dashboard_server.py','dashboar
              'config.yaml','companion.json','requirements.txt','LICENSE','README.md'):
     shutil.copy2(root / name, engine / name)
 (engine / 'data').mkdir()
+# Same-version rebuilds must still replace the installed engine: the installer compares this id too.
+import uuid as _uuid
+(engine / '.source-build-id').write_text(_uuid.uuid4().hex)
 with (contents / 'Info.plist').open('wb') as f:
     plistlib.dump({'CFBundleName':'AI Dev Director', 'CFBundleDisplayName':'AI Dev Director',
         'CFBundleIdentifier':'local.aidevdirector.macpreview','CFBundleVersion':VERSION,
