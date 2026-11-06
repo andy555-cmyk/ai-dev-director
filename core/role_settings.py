@@ -37,3 +37,28 @@ def save(roles):
         temp.write_text(json.dumps(roles, ensure_ascii=False), encoding='utf-8')
         os.replace(temp, PATH)
     return roles
+
+
+CLI_NAMES = {'openai': 'codex', 'claude': 'claude', 'antigravity': 'agy'}
+
+
+def effective(config, available=None):
+    """Roles the next run will really use when a CLI is not installed (mirrors ProviderManager.resolve_roles).
+    Returns (roles, substitutions). Display only; saved preferences are never changed."""
+    roles = current(config)
+    if available is None:
+        from core.env_utils import resolve_cli
+        available = {p for p, cli in CLI_NAMES.items() if resolve_cli(cli)}
+    out, notes = dict(roles), []
+    if len(available) < 2:
+        return out, notes
+    if 'openai' not in available:
+        out.update(head='claude', reviewer='claude')
+    elif 'antigravity' not in available:
+        out.update(builder='openai', reviewer='claude')
+    elif 'claude' not in available:
+        out.update(head='openai', reviewer='openai')
+    for role in ('head', 'builder', 'reviewer'):
+        if out[role] != roles[role]:
+            notes.append({'role': role, 'requested': roles[role], 'using': out[role]})
+    return out, notes

@@ -1,0 +1,10 @@
+/* 0.3.7 HayDay polish: layout fixes and a readable type floor, loaded last. */
+#panel-now>*,#composer>*,#chat-form>*,#panel-work>*{flex-shrink:0}
+#top-project{min-height:46px}
+#top-project::before{content:"작업 폴더  ";color:#7fb4c2}
+#chat-peek{height:auto!important;min-height:48px;align-items:flex-start;padding-top:8px;padding-bottom:8px}
+#peek-text{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:normal!important;font-size:12px!important;line-height:1.55!important}
+#chat-peek{font-size:12px!important}
+.slot-label{min-width:150px}
+.slot-label .slot-status,.slot-label .slot-stat{font-size:11px!important}
+.slot-label .slot-role{font-size:11px!important}

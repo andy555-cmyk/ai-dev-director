@@ -16,7 +16,7 @@ import venv
 import webbrowser
 from install_support import install_engine
 
-VERSION = '0.3.6'
+VERSION = '0.3.7'
 URL = 'http://127.0.0.1:8081'
 
 
@@ -105,5 +105,6 @@ if __name__ == '__main__':
         raise SystemExit(main())
     except Exception as exc:
         print('실행에 실패했습니다: ' + str(exc), file=sys.stderr)
-        input('엔터를 누르면 종료합니다.')
+        if sys.stdin and sys.stdin.isatty():
+            input('엔터를 누르면 종료합니다.')
         raise SystemExit(1)

@@ -12,13 +12,14 @@ from datetime import datetime, timezone
 from core.env_utils import get_sanitized_env, resolve_cli
 from core.process_runner import ProcessTreeRunner
 
-VERSION = '0.3.6'
+VERSION = '0.3.7'
 _CACHE = None
 _LOCK = threading.Lock()
 PROVIDERS = {'claude': 'claude', 'openai': 'codex', 'antigravity': 'agy'}
 HELP = {'claude': 'claude auth login', 'codex': 'codex login',
         'agy': 'Antigravity에서 CLI 설치 및 로그인 상태를 직접 확인하세요.',
         'grok': 'grok login --oauth'}
+HUMAN = {'claude': 'Claude Code', 'codex': 'Codex', 'agy': 'Antigravity', 'grok': 'Grok'}
 
 
 def probe(argv):
@@ -41,8 +42,17 @@ def _cli(name, executable):
     result['version'] = version.group() if code == 0 and version else None
     result['responding'] = code == 0 and not timed_out
     result['auth'] = 'manual_check' if name in ('agy', 'grok') else 'unknown'
-    if name in ('agy', 'grok'):
+    if name == 'agy':
         return result  # No documented non-interactive auth probe; never guess.
+    if name == 'grok':
+        # `grok models` lists models without a generation call and starts with the sign-in line.
+        code, output, timed_out = probe([executable, 'models'])
+        lower = output.lower()
+        if not timed_out and code == 0 and 'not authenticated' in lower:
+            result['auth'] = 'not_logged_in'
+        elif not timed_out and code == 0 and 'you are logged in' in lower:
+            result.update(auth='logged_in', billing='subscription')
+        return result
     args = ['auth', 'status'] if name == 'claude' else ['login', 'status']
     code, output, timed_out = probe([executable, *args])
     if timed_out or code is None:
@@ -60,9 +70,11 @@ def _cli(name, executable):
             result.update(auth='api_billing', billing='api_or_external')
         elif method == 'claude.ai' and code == 0 and auth.get('loggedIn') is not False:
             result.update(auth='logged_in', billing='subscription')
+        elif method == 'oauth_token' and code == 0 and auth.get('loggedIn') is not False:
+            # `claude setup-token` long-lived token: issued only to Pro/Max subscriptions, billed to the plan.
+            result.update(auth='logged_in', billing='subscription', auth_detail='long_lived_token')
         elif code == 1 or auth.get('loggedIn') is False or method == 'none':
             result['auth'] = 'not_logged_in'
-        # Older output / oauth_token without a billing indication is not a verified subscription.
     else:
         lower = output.lower()
         if code == 0 and 'api key' in lower:
@@ -115,6 +127,18 @@ def collect(config):
             blockers.append(package + ' 설치가 필요합니다.')
     if installed < 2:
         blockers.append('AI CLI를 최소 두 개 설치하세요.')
+    notices = []
+    if 'unknown' not in roles.values():
+        # Missing CLI -> the run substitutes another installed AI (ProviderManager.resolve_roles). Show that.
+        from core.role_settings import CLI_NAMES, effective
+        available = {p for p, cli in CLI_NAMES.items() if by_name.get(cli, {}).get('installed')}
+        to_cli = {'openai': 'codex', 'claude': 'claude', 'antigravity': 'agy'}
+        cfg = {r: {'provider': {'codex': 'openai', 'agy': 'antigravity'}.get(n, n)} for r, n in roles.items()}
+        using, subs = effective(cfg, available)
+        for sub in subs:
+            notices.append(sub['role'].upper() + ': ' + HUMAN[to_cli[sub['requested']]] + ' CLI가 없어 '
+                           + HUMAN[to_cli[sub['using']]] + '가 대신 맡습니다.')
+        roles = {r: to_cli[p] for r, p in using.items()}
     for role, name in roles.items():
         if name == 'unknown':
             blockers.append(role.upper() + ' 역할의 제공자 설정을 확인하세요.')
@@ -140,7 +164,7 @@ def collect(config):
             'dependencies': dependencies, 'roles': roles, 'providers': rows,
             'installed_count': installed, 'confirmed_subscription_count': confirmed,
             'status': 'blocked' if blockers else ('ready' if ready else 'needs_check'),
-            'blockers': blockers, 'warnings': warnings,
+            'blockers': blockers, 'warnings': warnings, 'notices': notices,
             'scope': '설치 및 로그인 점검입니다. 실제 AI 작업 성공·사용량·요금은 검증하지 않습니다.'}
 
 

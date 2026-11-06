@@ -121,7 +121,8 @@ def test_grok_diagnostic_does_not_guess_authentication(monkeypatch):
     monkeypatch.setattr(diag,'probe',probe)
     row = diag._cli('grok','/bin/grok')
     assert row['installed'] and row['version']=='1.0.46' and row['auth']=='manual_check'
-    assert row['billing']=='unknown' and probe.call_count==1
+    # 0.3.7: one extra non-generating `grok models` probe; output without a sign-in line is still not guessed.
+    assert row['billing']=='unknown' and probe.call_count==2 and probe.call_args_list[1][0][0][1]=='models'
 
 
 def test_http_grok_requires_local_authenticated_valid_request(http_server, monkeypatch):

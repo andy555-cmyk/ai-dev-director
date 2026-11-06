@@ -8,7 +8,7 @@ import subprocess
 import sys
 import zipfile
 
-VERSION = '0.3.6'
+VERSION = '0.3.7'
 root = Path(__file__).resolve().parents[2]
 out = root.parent / 'macos-release'
 volume = out / 'volume'
@@ -40,15 +40,25 @@ with (contents / 'Info.plist').open('wb') as f:
         'CFBundleExecutable':'launcher','LSMinimumSystemVersion':'10.15',
         'NSHighResolutionCapable':True}, f)
 (contents / 'PkgInfo').write_bytes(b'APPL????')
-readme = '''AI DEV DIRECTOR · macOS Preview 0.3.6
+readme = '''AI DEV DIRECTOR · macOS Preview 0.3.7
 
 설치 / 업데이트
 1. AI Dev Director.app을 응용 프로그램(Applications) 폴더로 복사합니다.
 2. 이전 버전을 실행 중이면 시스템 중지 후 새 앱으로 교체합니다.
-3. 앱을 실행하면 터미널에서 설정 후 브라우저에 입체형 HUD 메인 화면이 열립니다.
+3. 앱을 실행하면 터미널 창 없이 뒤에서 켜지고, 준비되면 브라우저에 HUD 화면이 열립니다(첫 실행은 1~2분).
 4. 연결 진단에서 Python, Git, AI CLI 설치 및 구독 로그인을 확인합니다.
 5. 작업 화면으로 돌아가 프로젝트 폴더와 역할을 선택합니다.
-6. 종료는 화면의 시스템 중지 또는 실행 터미널에서 Control+C입니다.
+6. 종료는 화면의 시스템 중지입니다. Option 키를 누른 채 앱을 열면 예전처럼 터미널 창에서 실행합니다.
+
+0.3.7 변경 사항 (헤이데이 맥 보완)
+- 터미널 창 없이 실행. 로그인 셸의 PATH를 읽어 npm·Homebrew로 깐 CLI도 Finder 실행에서 찾음
+- 실행 실패는 알림 창과 launcher.log로 안내
+- Claude 장기 토큰(claude setup-token) 로그인을 구독 로그인으로 인정
+- Grok 로그인을 자동 판정(grok models, 생성 호출 없음)
+- 설치 안 된 AI 자리는 실제 대신 맡는 AI로 HUD·진단에 표시(예: Antigravity 없음 → 구현 Codex, 검수 Claude)
+- Grok 호출 때 Claude·Cursor 설정(MCP 서버, 훅, CLAUDE.md, 규칙, 스킬)을 끄고 실행. 예전에는 사용자의 MCP 서버가 전부 같이 켜졌음
+- 왼쪽 패널: 작업 폴더 칸이 짜부라져 보이지 않던 문제, 진행 문구가 작업 시작 버튼을 덮던 문제 수정
+- 9~11px 글자를 11~12px로 키움
 
 0.3.6 변경 사항
 - Grok을 계획·구현·테스트 검수·최종 판단과 자동 보완의 전체 흐름에 연동
@@ -151,7 +161,7 @@ with zipfile.ZipFile(volume / 'Source_Code.zip', 'w', zipfile.ZIP_DEFLATED) as a
     for rel in sorted(set(files)):
         if rel and (root / rel).is_file() and rel not in ("docs/design/hud-comparison.jpg", "docs/design/hud-core-comparison.jpg"):
             archive.write(root / rel, 'ai-dev-director/' + rel)
-build_info = {'upstream_commit':'a463e7886666794101f6a6c7542abdcf9c9b6c0b',
+build_info = {'upstream_commit':'a463e7886666794101f6a6c7542abdcf9c9b6c0b','hayday_mac_patch':'0.3.7',
               'version':VERSION,'macos_runtime_tested':True,'login_credential_flow_tested':False,'related_tests_passed':668,'connection_badges_tested':True,'circuit_hud_tested':True,'grok_full_pipeline_tested':True,'real_four_cli_pipeline_passed':True,'grok_hud_regression_tested':True,'grok_cli_response_tested':True,'grok_web_research_tested':True,'signed':False,'python_bundled':False}
 (volume / 'BUILD_INFO.json').write_text(json.dumps(build_info, indent=2))
 dmg = out / 'AI_Dev_Director_macOS_Preview.dmg'

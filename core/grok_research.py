@@ -29,6 +29,12 @@ class ResearchError(Exception):
         self.code = code
 
 
+# Grok CLI imports Claude Code / Cursor settings by default (CLAUDE.md, skills, hooks, every MCP server in
+# ~/.claude.json). A research call must not start the operator's MCP servers or hooks, nor read their rules.
+ISOLATION_ENV = {'GROK_' + h + '_' + k + '_ENABLED': 'false'
+                 for h in ('CLAUDE', 'CURSOR') for k in ('AGENTS', 'HOOKS', 'MCPS', 'RULES', 'SKILLS')}
+
+
 def research_command(executable, prompt_file, pipeline=False):
     command = [str(executable), '--prompt-file', str(prompt_file), '--output-format', 'json',
             '--sandbox', 'read-only', '--tools', 'web_search,web_fetch',
@@ -165,6 +171,7 @@ class GrokResearch:
                 environment = get_sanitized_env()
                 for key in ('GROK_AUTH_PROVIDER_COMMAND', 'GROK_AUTH_PROVIDER_ACCESS_TOKEN', 'GROK_AUTH_PROVIDER_REFRESH_TOKEN'):
                     environment.pop(key, None)
+                environment.update(ISOLATION_ENV)
                 if self.stop.is_set():
                     return
                 command = research_command(executable, prompt_file, pipeline=job.get('source')=='pipeline')

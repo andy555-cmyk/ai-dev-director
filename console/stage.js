@@ -45,10 +45,11 @@ async function getJSON(url){const r=await fetch(url,{cache:'no-store'});if(!r.ok
 
 // ------------------------------------------------------------------ model
 const CLI={claude:'ANTHROPIC',antigravity:'GOOGLE',openai:'OPENAI'},CLI_OF={ANTHROPIC:'claude',GOOGLE:'antigravity',OPENAI:'openai'};
-let roleSettings=null,roleToken=null;                 // what the NEXT task will use (data/role_settings.json via /ops/roles)
-async function pollRoles(){try{const r=await getJSON('/ops/roles');roleSettings=r.roles;roleToken=r.csrf;repaint();}catch(e){/* keep the last known roles */}}
+let roleSettings=null,roleToken=null,roleEffective=null;   // saved preference vs. what the next task really uses (missing CLI -> substitute)
+async function pollRoles(){try{const r=await getJSON('/ops/roles');roleSettings=r.roles;roleEffective=r.effective||r.roles;roleToken=r.csrf;repaint();}catch(e){/* keep the last known roles */}}
 function assignment(){
-  if(roleSettings&&!isLiveNow())return {HEAD:CLI[roleSettings.head],BUILDER:CLI[roleSettings.builder],REVIEWER:CLI[roleSettings.reviewer]};
+  const use=roleEffective||roleSettings;
+  if(use&&!isLiveNow())return {HEAD:CLI[use.head],BUILDER:CLI[use.builder],REVIEWER:CLI[use.reviewer]};
   const a={...DEFAULT_ASSIGN},prov=(status&&status.providers)||{};
   for(const [p,info] of Object.entries(prov))if(info&&ROLES.includes(info.role)&&AI[p])a[info.role]=p;
   return a;
@@ -233,7 +234,9 @@ function paintScene(m){
   ROLES.forEach((role,i)=>{const w=m.working.find(x=>x.role===role),p=w?w.provider:m.assign[role];if(w)act[i]=1;colors.push((AI[p]||AI[m.assign[role]]).rgb);
     const label=document.querySelector('.slot-label[data-slot="'+i+'"]'),acting=w&&w.provider!==m.assign[role];
     label.style.setProperty('--c',(AI[p]||{}).css||'#fff');label.classList.toggle('busy',!!w);
-    label.querySelector('.slot-name').textContent=((AI[p]||{name:p}).name)+(acting?' (대행)':'');
+    const swapped=!w&&m.mode!=='replay'&&roleSettings&&roleEffective&&roleSettings[role.toLowerCase()]!==roleEffective[role.toLowerCase()];
+    label.querySelector('.slot-name').textContent=((AI[p]||{name:p}).name)+(acting?' (대행)':swapped?' (대체)':'');
+    label.title=swapped?(AI[CLI[roleSettings[role.toLowerCase()]]]||{name:'원래 AI'}).name+' CLI가 없어 '+(AI[p]||{name:p}).name+'가 대신 맡습니다':'';
     label._work=w?{text:SHORT[w.stage]||(role==='BUILDER'?SHORT.BUILDING:role==='REVIEWER'?SHORT.REVIEWING:'작업 중'),at:w.at,fixed:m.mode==='replay'?w.elapsed:null}:null;
     label.querySelector('.slot-status').textContent=label._work?label._work.text+' · '+clock(label._work.fixed!=null?label._work.fixed:(Date.now()-label._work.at)/1000):'대기';
     label.querySelector('.slot-stat').textContent=m.stats[p]||'';});

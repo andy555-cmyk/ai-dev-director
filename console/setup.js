@@ -32,8 +32,8 @@ function render(r){
   const link=node('a','공식 설치 안내 ↗');link.href=installLinks[p.name];link.target='_blank';link.rel='noopener noreferrer';card.append(link);$('providers').append(card);
  }
  $('roles').replaceChildren();for(const [role,name] of Object.entries(r.roles))$('roles').append(node('span',role.toUpperCase()+' · '+providerLabels[name]));
- for(const key of ['blockers','warnings']){const list=$(key);list.replaceChildren();for(const text of r[key]||[])list.append(node('li',text));}
- if(!r.blockers.length&&!r.warnings.length)$('warnings').append(node('li','추가 확인 항목이 없습니다. 실제 작업은 별도 검증이 필요합니다.'));
+ for(const key of ['blockers','warnings']){const list=$(key);list.replaceChildren();for(const text of (key==='warnings'?[...(r.notices||[]),...(r.warnings||[])]:r[key]||[]))list.append(node('li',text));}
+ if(!r.blockers.length&&!r.warnings.length&&!(r.notices||[]).length)$('warnings').append(node('li','추가 확인 항목이 없습니다. 실제 작업은 별도 검증이 필요합니다.'));
 }
 async function openLogin(provider,button){
  if(loginBusy.has(provider))return;

@@ -14,7 +14,7 @@ from core.solomon_bridge import SolomonBridge
 ROOT = Path(__file__).resolve().parent
 # The console is a fixed allowlist of local files: nothing outside console/ is ever served.
 STATIC_FILES = {'/': 'index.html', '/console.js': 'console.js', '/console.css': 'console.css',
-                '/grok.js': 'grok.js', '/grok.css': 'grok.css',
+                '/grok.js': 'grok.js', '/grok.css': 'grok.css', '/polish.css': 'polish.css',
                 '/stage.css': 'stage.css', '/trinity.js': 'trinity.js', '/stage.js': 'stage.js',
                 '/setup': 'setup.html', '/setup.js': 'setup.js', '/setup.css': 'setup.css',
                 '/hud.css': 'hud.css', '/hud.js': 'hud.js', '/hud-backdrop.png': 'hud-backdrop.png', '/hud-core.png': 'hud-core.png',
@@ -140,8 +140,11 @@ class CompanionHandler(d.DashboardHandler):
             report = cached()
             return self._send_json({'report': report, 'connections': snapshot(report, ROOT)})
         if path == '/ops/roles':
-            from core.role_settings import current
-            return self._send_json({'roles': current(d.load_config()), 'csrf': self.server.bridge_token})
+            from core.role_settings import current, effective
+            config = d.load_config()
+            using, substitutions = effective(config)
+            return self._send_json({'roles': current(config), 'effective': using, 'substitutions': substitutions,
+                                    'csrf': self.server.bridge_token})
         if path in STATIC_FILES:
             name = STATIC_FILES[path]
             body = (ROOT / 'console' / name).read_bytes()
