@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from core.env_utils import get_sanitized_env, resolve_cli
 from core.process_runner import ProcessTreeRunner
 
-VERSION = '0.4.4'
+VERSION = '0.4.5'
 _CACHE = None
 _LOCK = threading.Lock()
 PROVIDERS = {'claude': 'claude', 'openai': 'codex', 'antigravity': 'agy'}
