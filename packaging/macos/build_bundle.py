@@ -21,6 +21,9 @@ resources = contents / 'Resources'
 resources.mkdir()
 # 0.4.1: the app is a native window (AppKit + WKWebView), not a script that opens a browser tab. Universal binary.
 EXE = 'AI Dev Director'
+# Build number per build: macOS caches app icons by bundle id + CFBundleVersion, so a rebuilt icon needs a new one.
+import time as _time
+BUILD_NO = VERSION + '.' + _time.strftime('%y%m%d%H%M')
 _tmp = out / '_shell'
 _tmp.mkdir(parents=True, exist_ok=True)
 _slices = []
@@ -31,7 +34,9 @@ for arch in ('arm64', 'x86_64'):
     _slices.append(str(target))
 subprocess.run(['lipo', '-create', *_slices, '-output', str(contents / 'MacOS' / EXE)], check=True)
 shutil.rmtree(_tmp)
-shutil.copy2(root / 'packaging/macos/AppIcon.icns', resources / 'AppIcon.icns')
+# App icon: one full .icns (all sizes) like DAYZ. An actool asset catalog left only 16/128px in the fallback icns.
+subprocess.run(['iconutil', '-c', 'icns', str(root / 'packaging/macos/AppIcon.iconset'),
+                '-o', str(resources / 'AppIcon.icns')], check=True)
 for name in ('start.command', 'mac_bootstrap.py', 'install_support.py'):
     shutil.copy2(root / 'packaging/macos' / name, resources / name)
 (resources / 'start.command').chmod(0o755)
@@ -49,9 +54,9 @@ import uuid as _uuid
 (engine / '.source-build-id').write_text(_uuid.uuid4().hex)
 with (contents / 'Info.plist').open('wb') as f:
     plistlib.dump({'CFBundleName':'AI Dev Director', 'CFBundleDisplayName':'AI Dev Director',
-        'CFBundleIdentifier':'local.aidevdirector.macpreview','CFBundleVersion':VERSION,
+        'CFBundleIdentifier':'kr.hayday.aidevdirector','CFBundleVersion':BUILD_NO,
         'CFBundleShortVersionString':VERSION,'CFBundlePackageType':'APPL',
-        'CFBundleExecutable':EXE,'LSMinimumSystemVersion':'12.0','CFBundleIconFile':'AppIcon',
+        'CFBundleExecutable':EXE,'LSMinimumSystemVersion':'12.0','CFBundleIconFile':'AppIcon.icns',
         'NSPrincipalClass':'NSApplication','LSApplicationCategoryType':'public.app-category.developer-tools',
         'NSHighResolutionCapable':True}, f)
 (contents / 'PkgInfo').write_bytes(b'APPL????')

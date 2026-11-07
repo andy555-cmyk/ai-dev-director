@@ -64,6 +64,6 @@ def test_mac_app_is_native_window_not_browser_tab():
     assert 'WKWebView' in shell and '"--background"' in shell and 'env["BROWSER"] = "true"' in shell
     assert 'applicationShouldTerminate' in shell and 'mac_bootstrap.py' in shell
     build = (ROOT / 'packaging' / 'macos' / 'build_bundle.py').read_text(encoding='utf-8')
-    assert 'AppShell.swift' in build and "'CFBundleIconFile':'AppIcon'" in build
-    assert (ROOT / 'packaging' / 'macos' / 'AppIcon.icns').is_file()
+    assert 'AppShell.swift' in build and "'CFBundleIconFile':'AppIcon.icns'" in build and 'iconutil' in build
+    assert (ROOT / 'packaging' / 'macos' / 'AppIcon.iconset' / 'icon_512x512@2x.png').is_file()
     assert not (ROOT / 'packaging' / 'macos' / 'launcher').exists()

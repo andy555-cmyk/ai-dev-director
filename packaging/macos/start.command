@@ -10,7 +10,10 @@ mkdir -p "$APP_DATA"
 LOGIN_PATH="$( ( "${SHELL:-/bin/zsh}" -ilc 'printf "__PATH__%s" "$PATH"' 2>/dev/null & pid=$!; ( sleep 8; kill $pid 2>/dev/null ) & wait $pid ) | sed -n 's/.*__PATH__//p' | tail -1)"
 export PATH="${LOGIN_PATH:+$LOGIN_PATH:}$HOME/.local/bin:$HOME/.npm-global/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 fail() {
-    if [ -n "$BACKGROUND" ]; then
+    if [ -n "${AI_DEV_DIRECTOR_APP:-}" ]; then
+        # 0.4.1: started by the app window, which shows the failure itself. No second dialog.
+        printf '\n%s\n' "$1"
+    elif [ -n "$BACKGROUND" ]; then
         /usr/bin/osascript -e 'on run argv' -e 'display dialog (item 1 of argv) with title "AI DEV DIRECTOR" buttons {"확인"} default button 1 with icon caution' -e 'end run' "$1" >/dev/null 2>&1
     else
         printf '\n%s\n' "$1"; read -r -p '엔터를 누르면 종료합니다.' ignored
