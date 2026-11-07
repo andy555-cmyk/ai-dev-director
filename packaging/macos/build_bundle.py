@@ -8,7 +8,7 @@ import subprocess
 import sys
 import zipfile
 
-VERSION = '0.4.3'
+VERSION = '0.4.4'
 root = Path(__file__).resolve().parents[2]
 out = root.parent / 'macos-release'
 volume = out / 'volume'
