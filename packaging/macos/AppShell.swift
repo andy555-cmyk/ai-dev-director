@@ -428,6 +428,13 @@ func stopEngine() {
         Thread.sleep(forTimeInterval: 0.5)
     }
     run(["-INT", "-f", "companion_server.py"])
+    // An engine started from a background shell ignores SIGINT; do not leave it holding the port.
+    for _ in 0..<10 {
+        if !healthSync() { return }
+        Thread.sleep(forTimeInterval: 0.5)
+    }
+    run(["-TERM", "-f", "Contents/Resources/mac_bootstrap.py"])
+    run(["-TERM", "-f", "companion_server.py"])
 }
 
 let app = NSApplication.shared

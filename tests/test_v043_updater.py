@@ -244,3 +244,10 @@ def test_next_version_bumps_patch_over_newest_tag(monkeypatch):
     rm = _release_tool()
     monkeypatch.setattr(rm, '_git', lambda *a, **k: SimpleNamespace(returncode=0, stdout='v0.4.3\nv0.4.10\n', stderr=''))
     assert rm.next_version() == '0.4.11'
+
+
+def test_swap_script_escalates_and_frees_the_port():
+    s = up.SWAP_SCRIPT
+    assert 'for sig in INT TERM KILL' in s and 'lsof -ti tcp:8081' in s
+    assert s.index('start.command') < s.index('for sig in INT TERM KILL')   # launcher first: no failure dialog
+    assert 'rm -rf' not in s

@@ -2,7 +2,7 @@
 (()=>{
  const $=id=>document.getElementById(id);
  const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
- let token='',snap=null,timer=0;
+ let token='',snap=null,timer=0,shownVersion='',installStart=0;
  async function auth(){if(!token){const r=await fetch('/ops/roles',{cache:'no-store'});token=(await r.json()).csrf||'';}return token;}
  async function api(path,body){const o={cache:'no-store',headers:{'X-Solomon-Bridge':await auth()}};if(body!==undefined){o.method='POST';if(body!==null){o.headers['Content-Type']='application/json';o.body=JSON.stringify(body);}}const r=await fetch(path,o),out=await r.json();if(!r.ok)throw Error(out.error||'요청이 실패했습니다');return out;}
  const when=t=>{if(!t)return '';const d=new Date(t);return isNaN(d)?esc(t):d.toLocaleString('ko-KR',{month:'long',day:'numeric',hour:'2-digit',minute:'2-digit'});};
@@ -42,6 +42,7 @@
   if(!snap||!$('set-update'))return;
   const s=snap,st=s.state||'idle',busy=['checking','downloading','installing'].includes(st),L=s.latest;
   let html=`<div class="set-now"><div><span class="set-label">지금 판</span><b class="set-ver">${esc(s.current)}</b></div><div class="set-state set-${esc(st)}">${busy?'<i class="set-spin"></i>':''}${esc(STATE[st]||st)}</div></div>`;
+  if(st==='installing'){if(!installStart)installStart=Date.now();const sec=Math.round((Date.now()-installStart)/1000);html+=`<p class="set-note">앱이 잠깐 꺼졌다가 새 판으로 다시 켜집니다 · 보통 30초 · ${sec}초 지남${sec>120?' · 2분이 넘으면 앱을 껐다 켜 주세요(새 판은 이미 들어가 있음)':''}</p>`;}
   if(st==='error'&&s.error)html+=`<p class="set-err">${esc(s.error)}</p>`;
   if(L&&['available','downloading','ready','installing','error'].includes(st))html+=`<div class="set-new"><div class="set-new-top"><b>새 판 ${esc(L.version)}</b><span>${esc(L.signer)} 출시${L.published_at?' · '+when(L.published_at):''}</span></div>${L.notes?`<p class="set-notes">${esc(L.notes)}</p>`:''}
    ${s.install_supported?`<button type="button" class="set-primary" data-up="apply" ${busy?'disabled':''}>업데이트하고 다시 켜기</button>`:'<p class="set-note">개발용으로 실행 중이라 여기서는 설치할 수 없습니다 · 설치된 앱에서 업데이트하세요</p>'}</div>`;
@@ -54,7 +55,7 @@
   motionLabel();
  }
  function badge(){const b=$('btn-settings');if(!b)return;const on=!!snap&&['available','ready'].includes(snap.state);b.classList.toggle('has-update',on);b.title=on?'새 판이 있습니다 · 눌러서 업데이트':'설정 · 업데이트 확인';}
- async function load(){try{snap=await api('/ops/update');}catch(e){}render();}
+ async function load(){try{snap=await api('/ops/update');if(!shownVersion)shownVersion=snap.current;else if(snap.current&&snap.current!==shownVersion){location.reload();return;}}catch(e){token='';}render();}
  function poll(){clearTimeout(timer);const busy=snap&&['checking','downloading','installing'].includes(snap.state);timer=setTimeout(async()=>{await load();if($('set-panel').open||busy)poll();},busy?1200:5000);}
  function open(){const d=$('set-panel');if(!d.open)d.showModal();load().then(poll);}
  function init(){build();const nav=document.querySelector('.top-actions');const btn=document.createElement('button');btn.type='button';btn.id='btn-settings';btn.textContent='설정';btn.onclick=open;nav.insertBefore(btn,$('btn-halt'));

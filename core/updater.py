@@ -431,12 +431,21 @@ say() { printf '%s %s\n' "$(date '+%F %T')" "$1"; }
 result() { printf '{"ok": %s, "version": "%s", "from": "%s", "at": "%s", "message": "%s"}\n' "$1" "$NEWV" "$OLDV" "$(date '+%Y-%m-%dT%H:%M:%S')" "$2" > "$RESULT"; }
 say "update $OLDV -> $NEWV"
 sleep 1
-pkill -INT -f "Contents/Resources/mac_bootstrap.py"
-for i in $(seq 1 40); do curl -s -m 1 http://127.0.0.1:8081/health >/dev/null 2>&1 || break; sleep 0.5; done
-pkill -INT -f "companion_server.py"
-sleep 1
+# Stop the engine. An engine started from a background shell ignores SIGINT, so escalate INT -> TERM -> KILL,
+# and stop the launcher first so it cannot pop a "실행에 실패" dialog when its engine goes away.
+alive() { curl -s -m 1 http://127.0.0.1:8081/health >/dev/null 2>&1 || lsof -ti tcp:8081 -sTCP:LISTEN >/dev/null 2>&1; }
+pkill -TERM -f "Contents/Resources/start.command"
+for sig in INT TERM KILL; do
+  pkill -$sig -f "Contents/Resources/mac_bootstrap.py"
+  pkill -$sig -f "companion_server.py"
+  for i in $(seq 1 16); do alive || break; sleep 0.5; done
+  alive || break
+  say "engine still up after $sig"
+done
+for pid in $(lsof -ti tcp:8081 -sTCP:LISTEN 2>/dev/null); do say "killing listener $pid"; kill -9 "$pid"; done
 pkill -x "AI Dev Director"
-for i in $(seq 1 40); do pgrep -x "AI Dev Director" >/dev/null || break; sleep 0.5; done
+for i in $(seq 1 20); do pgrep -x "AI Dev Director" >/dev/null || break; sleep 0.5; done
+pkill -KILL -x "AI Dev Director"
 PARENT="$(dirname "$APP")"
 STAGE="$PARENT/.AI Dev Director.update.app"
 if [ -e "$STAGE" ]; then mv "$STAGE" "$BACKUP.partial"; fi
