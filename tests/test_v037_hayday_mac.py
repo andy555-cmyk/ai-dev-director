@@ -58,6 +58,12 @@ def test_polish_css_is_served_and_linked():
     assert '#panel-now>*' in css and 'flex-shrink:0' in css
 
 
-def test_mac_launcher_runs_without_terminal_by_default():
-    launcher = (ROOT / 'packaging' / 'macos' / 'launcher').read_text(encoding='utf-8')
-    assert '--background' in launcher and 'nohup' in launcher
+def test_mac_app_is_native_window_not_browser_tab():
+    # 0.4.1: the app owns a WKWebView window, starts the engine as its child with BROWSER=true and stops it on quit.
+    shell = (ROOT / 'packaging' / 'macos' / 'AppShell.swift').read_text(encoding='utf-8')
+    assert 'WKWebView' in shell and '"--background"' in shell and 'env["BROWSER"] = "true"' in shell
+    assert 'applicationShouldTerminate' in shell and 'mac_bootstrap.py' in shell
+    build = (ROOT / 'packaging' / 'macos' / 'build_bundle.py').read_text(encoding='utf-8')
+    assert 'AppShell.swift' in build and "'CFBundleIconFile':'AppIcon'" in build
+    assert (ROOT / 'packaging' / 'macos' / 'AppIcon.icns').is_file()
+    assert not (ROOT / 'packaging' / 'macos' / 'launcher').exists()

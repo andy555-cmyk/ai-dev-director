@@ -8,7 +8,7 @@ import subprocess
 import sys
 import zipfile
 
-VERSION = '0.4.0'
+VERSION = '0.4.1'
 root = Path(__file__).resolve().parents[2]
 out = root.parent / 'macos-release'
 volume = out / 'volume'
@@ -19,8 +19,19 @@ contents = app / 'Contents'
 resources = contents / 'Resources'
 (contents / 'MacOS').mkdir(parents=True)
 resources.mkdir()
-shutil.copy2(root / 'packaging/macos/launcher', contents / 'MacOS/launcher')
-(contents / 'MacOS/launcher').chmod(0o755)
+# 0.4.1: the app is a native window (AppKit + WKWebView), not a script that opens a browser tab. Universal binary.
+EXE = 'AI Dev Director'
+_tmp = out / '_shell'
+_tmp.mkdir(parents=True, exist_ok=True)
+_slices = []
+for arch in ('arm64', 'x86_64'):
+    target = _tmp / arch
+    subprocess.run(['swiftc', '-O', '-target', arch + '-apple-macos12', str(root / 'packaging/macos/AppShell.swift'),
+                    '-o', str(target)], check=True)
+    _slices.append(str(target))
+subprocess.run(['lipo', '-create', *_slices, '-output', str(contents / 'MacOS' / EXE)], check=True)
+shutil.rmtree(_tmp)
+shutil.copy2(root / 'packaging/macos/AppIcon.icns', resources / 'AppIcon.icns')
 for name in ('start.command', 'mac_bootstrap.py', 'install_support.py'):
     shutil.copy2(root / 'packaging/macos' / name, resources / name)
 (resources / 'start.command').chmod(0o755)
@@ -40,18 +51,28 @@ with (contents / 'Info.plist').open('wb') as f:
     plistlib.dump({'CFBundleName':'AI Dev Director', 'CFBundleDisplayName':'AI Dev Director',
         'CFBundleIdentifier':'local.aidevdirector.macpreview','CFBundleVersion':VERSION,
         'CFBundleShortVersionString':VERSION,'CFBundlePackageType':'APPL',
-        'CFBundleExecutable':'launcher','LSMinimumSystemVersion':'10.15',
+        'CFBundleExecutable':EXE,'LSMinimumSystemVersion':'12.0','CFBundleIconFile':'AppIcon',
+        'NSPrincipalClass':'NSApplication','LSApplicationCategoryType':'public.app-category.developer-tools',
         'NSHighResolutionCapable':True}, f)
 (contents / 'PkgInfo').write_bytes(b'APPL????')
-readme = '''AI DEV DIRECTOR · macOS Preview 0.4.0
+# Ad-hoc signature over the whole bundle (Apple Silicon refuses unsigned or half-signed bundles).
+subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True)
+readme = '''AI DEV DIRECTOR · macOS Preview 0.4.1
 
 설치 / 업데이트
 1. AI Dev Director.app을 응용 프로그램(Applications) 폴더로 복사합니다.
 2. 이전 버전을 실행 중이면 시스템 중지 후 새 앱으로 교체합니다.
-3. 앱을 실행하면 터미널 창 없이 뒤에서 켜지고, 준비되면 브라우저에 HUD 화면이 열립니다(첫 실행은 1~2분).
+3. 앱을 실행하면 앱 자체 창이 뜨고, 엔진이 준비되면 그 창에 HUD 화면이 나옵니다(첫 실행은 1~2분). 브라우저는 열리지 않습니다.
 4. 연결 진단에서 Python, Git, AI CLI 설치 및 구독 로그인을 확인합니다.
 5. 작업 화면으로 돌아가 프로젝트 폴더와 역할을 선택합니다.
-6. 종료는 화면의 시스템 중지입니다. Option 키를 누른 채 앱을 열면 예전처럼 터미널 창에서 실행합니다.
+6. 종료는 ⌘Q(AI Dev Director 끝내기)입니다. 진행 중이던 작업은 다음에 켤 때 이어서 합니다. 창만 닫으면 작업은 계속되고, Dock 아이콘을 누르면 다시 열립니다.
+
+0.4.1 변경 사항 (진짜 맥 프로그램)
+- 앱을 누르면 크롬 탭이 아니라 앱 자체 창이 뜸. Dock 아이콘·메뉴(복사·붙여넣기·확대·새로 고침)·⌘Q 종료
+- Finder에서 눌렀을 때 아무것도 안 뜨던 문제 수정(실행 스크립트가 앱과 함께 꺼지던 것)
+- 엔진이 켜지는 동안 창에 진행 화면, 실패하면 이유와 기록 위치 표시
+- 바깥 링크는 기본 브라우저로, 내려받기는 저장 창으로
+- macOS 12 이상
 
 0.4.0 변경 사항 (한 줄로 앱 만들기)
 - 상단 「앱 만들기」: 만들 앱 한 줄과 폴더만 적으면 기획 → 구현 → 실제 화면 확인 → 수정 → 출시 묶음까지 진행
@@ -172,7 +193,7 @@ with zipfile.ZipFile(volume / 'Source_Code.zip', 'w', zipfile.ZIP_DEFLATED) as a
     for rel in sorted(set(files)):
         if rel and (root / rel).is_file() and rel not in ("docs/design/hud-comparison.jpg", "docs/design/hud-core-comparison.jpg"):
             archive.write(root / rel, 'ai-dev-director/' + rel)
-build_info = {'upstream_commit':'a463e7886666794101f6a6c7542abdcf9c9b6c0b','hayday_mac_patch':'0.4.0',
+build_info = {'upstream_commit':'a463e7886666794101f6a6c7542abdcf9c9b6c0b','hayday_mac_patch':VERSION,
               'version':VERSION,'macos_runtime_tested':True,'login_credential_flow_tested':False,'related_tests_passed':688,'known_failing_upstream':['test_v014_qualification::test_a2_permission_guard_hook_blocks_escapes'],'connection_badges_tested':True,'circuit_hud_tested':True,'grok_full_pipeline_tested':True,'real_four_cli_pipeline_passed':True,'grok_hud_regression_tested':True,'grok_cli_response_tested':True,'grok_web_research_tested':True,'signed':False,'python_bundled':False}
 (volume / 'BUILD_INFO.json').write_text(json.dumps(build_info, indent=2))
 dmg = out / 'AI_Dev_Director_macOS_Preview.dmg'
