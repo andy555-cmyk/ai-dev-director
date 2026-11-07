@@ -50,6 +50,10 @@ def _keychain_get(name):
 
 
 def default_name():
+    # A Korean account name is printed by `security` as hex, so look for the registered signers first.
+    for name in U.TRUSTED_KEYS:
+        if _keychain_get(name):
+            return name
     r = subprocess.run(['/usr/bin/security', 'find-generic-password', '-s', SERVICE], capture_output=True, text=True)
     m = re.search(r'"acct"<blob>="([^"]*)"', r.stdout)
     return m.group(1) if m else getpass.getuser()
@@ -89,6 +93,21 @@ def bump(version):
         p.write_text(new, encoding='utf-8')
 
 
+def commit_and_push(version):
+    """The release tag must point at the exact source that was built: commit the bump, push, return the sha."""
+    git = lambda *args: subprocess.run(['git', *args], cwd=ROOT, capture_output=True, text=True)
+    git('add', '-A')
+    if git('diff', '--cached', '--quiet').returncode != 0:
+        r = git('commit', '-m', '출시 %s' % version)
+        if r.returncode != 0:
+            raise SystemExit('커밋하지 못했습니다: ' + r.stderr.strip()[:300])
+    branch = git('branch', '--show-current').stdout.strip() or 'main'
+    r = git('push', 'origin', branch)
+    if r.returncode != 0:
+        raise SystemExit('코드를 GitHub 에 올리지 못했습니다(출시 중단): ' + r.stderr.strip()[:300])
+    return git('rev-parse', 'HEAD').stdout.strip()
+
+
 def publish(a):
     if not U.VERSION_RE.match(a.version):
         raise SystemExit('판 번호는 0.4.4 같은 형식입니다')
@@ -104,7 +123,10 @@ def publish(a):
     if not a.skip_tests:
         py = shutil.which('python3')
         venv = ROOT.parent / '.venv-test' / 'bin' / 'python'
-        r = subprocess.run([str(venv) if venv.exists() else py, '-m', 'pytest', '-q', '-x', 'tests'], cwd=ROOT)
+        env = dict(os.environ)
+        if venv.exists():                    # some tests run a bare `python`; give them the same interpreter
+            env['PATH'] = str(venv.parent) + os.pathsep + env.get('PATH', '')
+        r = subprocess.run([str(venv) if venv.exists() else py, '-m', 'pytest', '-q', '-x', 'tests'], cwd=ROOT, env=env)
         if r.returncode != 0:
             raise SystemExit('테스트가 실패해서 출시하지 않습니다')
     subprocess.run(['/usr/bin/python3', 'packaging/macos/build_bundle.py'], cwd=ROOT, check=True)
@@ -131,10 +153,11 @@ def publish(a):
     gh = U._gh()
     if not gh:
         raise SystemExit('gh 가 없습니다. brew install gh 후 gh auth login')
+    target = commit_and_push(a.version)
     title = 'AI Dev Director %s' % a.version
     notes = (a.notes or '') + '\n\n출시: %s · 서명 키 %s' % (name, U.key_fingerprint(pub))
     subprocess.run([gh, 'release', 'create', 'v' + a.version, str(dmg), str(manifest), str(dist / 'SHA256SUMS.txt'),
-                    '-R', repo, '--title', title, '--notes', notes], check=True)
+                    '-R', repo, '--title', title, '--notes', notes, '--target', target, '--latest'], check=True)
     print('올렸습니다: https://github.com/%s/releases/tag/v%s' % (repo, a.version))
 
 
