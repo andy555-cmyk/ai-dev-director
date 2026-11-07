@@ -29,6 +29,7 @@
  function msg(t){$('dlv-msg').textContent=t||'';}
  function shots(urls,cls){return (urls||[]).filter(Boolean).map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener"><img class="${cls||'dlv-shot'}" src="${esc(u)}" alt="앱 화면 캡처" loading="lazy"></a>`).join('');}
  function steps(phase){let reached=STEPS.findIndex(s=>s[0]===phase);if(phase==='READY')reached=STEPS.length-1;return `<ol class="dlv-steps">${STEPS.map((s,i)=>`<li class="${i<reached?'done':i===reached?'now':''}">${s[1]}</li>`).join('')}</ol>`;}
+ function openBtn(d){return ['PLANNING','WAIT_PLAN_APPROVAL'].includes(d.phase)?'':`<div class="dlv-act dlv-open"><button type="button" class="dlv-primary" data-act="preview">앱 열어 보기</button><span class="dlv-note">${d.phase==='READY'?'완성된 앱을 새 창에서 직접 써 봅니다':'지금까지 만든 화면을 새 창에서 써 봅니다'}</span></div>`;}
  function actions(d){
   const fb=`<div class="dlv-fb"><label for="dlv-fbtext">고칠 점</label><textarea id="dlv-fbtext" rows="2" maxlength="1000" placeholder="예: 첫 화면에 이번 주 경기 출석부터 보이게"></textarea><button type="button" data-act="feedback">의견 보내기</button></div>`;
   if(d.phase==='WAIT_PLAN_APPROVAL')return `<div class="dlv-act"><button type="button" class="dlv-primary" data-act="approve" data-what="plan">이 기획으로 만들기</button></div>${fb}`;
@@ -46,7 +47,7 @@
   const showWire=['WAIT_PLAN_APPROVAL','PLANNING'].includes(d.phase)||!(d.latest_shots||[]).length;
   return `<div class="dlv-top"><h3>${esc(d.title||d.goal)}</h3><span class="dlv-phase p-${esc(d.phase)}">${esc(LABEL[d.phase]||d.phase)}</span></div>
    ${steps(d.phase)}${d.summary?`<p class="dlv-summary">${esc(d.summary)}</p>`:''}${d.reason?`<p class="dlv-reason">${esc(d.reason)}</p>`:''}
-   ${actions(d)}
+   ${openBtn(d)}${actions(d)}
    ${showWire&&wf?`<h4>화면 설계</h4><div class="dlv-wires">${wf}</div>`:''}
    ${!showWire?`<h4>지금 화면</h4><div class="dlv-thumbs big">${shots(d.latest_shots)}</div>`:''}
    ${docs?`<h4>기획 문서</h4><div class="dlv-docs">${docs}</div>`:''}
@@ -54,13 +55,16 @@
    ${ev?`<h4>진행 기록</h4><ul class="dlv-events">${ev}</ul>`:''}`;
  }
  async function act(btn){
-  if(busy||!current)return;busy=true;btn.disabled=true;
+  if(busy||!current)return;busy=true;btn.disabled=true;let pw=null;
   try{const a=btn.dataset.act,base='/ops/deliveries/'+encodeURIComponent(current)+'/';let d;
+   if(a==='preview'){const w=pw=window.open('about:blank','_blank');const r=await api(base+'preview',{});
+    if(w){w.location.href=r.url;}else{location.href=r.url;}
+    msg('앱을 새 창으로 열었습니다'+(r.demo?' · 처음 열면 예시 데이터가 들어 있습니다':''));return;}
    if(a==='approve'){const now=await api(base.slice(0,-1));d=await api(base+'approve',{what:btn.dataset.what,plan_hash:now.plan_hash});}
    else if(a==='feedback'){const t=$('dlv-fbtext').value.trim();if(!t)throw Error('고칠 점을 적어 주세요');d=await api(base+'feedback',{text:t});}
    else d=await api(base+a,{});
    msg({approve:'승인했습니다',feedback:'의견을 반영해 다시 작업합니다',stop:'멈췄습니다',resume:'이어서 진행합니다'}[a]);await refresh();}
-  catch(e){msg(e.message);}finally{busy=false;btn.disabled=false;}
+  catch(e){if(pw&&!pw.closed&&pw.location.href==='about:blank')pw.close();msg(e.message);}finally{busy=false;btn.disabled=false;}
  }
  async function refresh(){
   clearTimeout(timer);

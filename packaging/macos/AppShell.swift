@@ -1,4 +1,4 @@
-// AI Dev Director · native macOS shell (0.4.1)
+// AI Dev Director · native macOS shell (0.4.1, 0.4.2 앱 열어 보기 창)
 // The app is its own window now: it starts the local engine (Resources/start.command) as a child, waits for
 // 127.0.0.1:8081/health and shows the HUD in a WKWebView. No browser tab. Quitting the app stops the engine;
 // records and worktrees stay and interrupted missions resume on the next start (resume_on_start).
@@ -13,7 +13,8 @@ let appData = FileManager.default.homeDirectoryForCurrentUser
 func isLocal(_ url: URL?) -> Bool {
     guard let url = url else { return false }
     if url.scheme == "about" || url.scheme == "blob" || url.scheme == "data" { return true }
-    return ["127.0.0.1", "localhost"].contains(url.host ?? "") && url.port == 8081
+    // The engine (8081) and the 「앱 열어 보기」 previews (other local ports) stay inside the app.
+    return ["127.0.0.1", "localhost"].contains(url.host ?? "")
 }
 
 func checkHealth(_ done: @escaping (Bool) -> Void) {
@@ -29,6 +30,7 @@ final class WebWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUIDel
     let window: NSWindow
     let web: WKWebView
     var onClose: ((WebWindow) -> Void)?
+    var titleWatch: NSKeyValueObservation?
 
     init(configuration: WKWebViewConfiguration, frame: NSRect, title: String) {
         window = NSWindow(contentRect: frame, styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -45,6 +47,9 @@ final class WebWindow: NSObject, NSWindowDelegate, WKNavigationDelegate, WKUIDel
         web.allowsMagnification = true
         web.setValue(false, forKey: "drawsBackground")
         window.contentView = web
+        titleWatch = web.observe(\.title, options: [.new]) { [weak self] w, _ in
+            if let t = w.title, !t.isEmpty { self?.window.title = t }
+        }
     }
 
     func windowWillClose(_ notification: Notification) { onClose?(self) }
@@ -156,6 +161,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         buildMenu()
         config.websiteDataStore = .default()
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
         let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
         let size = NSSize(width: min(1440, screen.width - 40), height: min(920, screen.height - 40))
         main = WebWindow(configuration: config, frame: NSRect(origin: .zero, size: size), title: "AI Dev Director")

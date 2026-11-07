@@ -336,6 +336,12 @@ class CompanionHandler(d.DashboardHandler):
                     dlv = r.start(project, str(payload.get('goal', '')))
                 else:
                     ident, action = parts[3][:80], (parts[4] if len(parts) > 4 else '')
+                    if action == 'preview':         # 0.4.2 「앱 열어 보기」: serve the built app on its own port
+                        from core import app_preview
+                        found = r.store.load(ident)
+                        if not found:
+                            raise ValueError('없는 납품입니다')
+                        return self._send_json(app_preview.open_preview(found))
                     if action == 'approve':
                         dlv = r.approve(ident, str(payload.get('what', '')), plan_hash=payload.get('plan_hash'))
                     elif action == 'feedback':

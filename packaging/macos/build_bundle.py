@@ -8,7 +8,7 @@ import subprocess
 import sys
 import zipfile
 
-VERSION = '0.4.1'
+VERSION = '0.4.2'
 root = Path(__file__).resolve().parents[2]
 out = root.parent / 'macos-release'
 volume = out / 'volume'
@@ -62,7 +62,7 @@ with (contents / 'Info.plist').open('wb') as f:
 (contents / 'PkgInfo').write_bytes(b'APPL????')
 # Ad-hoc signature over the whole bundle (Apple Silicon refuses unsigned or half-signed bundles).
 subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True)
-readme = '''AI DEV DIRECTOR · macOS Preview 0.4.1
+readme = '''AI DEV DIRECTOR · macOS Preview 0.4.2
 
 설치 / 업데이트
 1. AI Dev Director.app을 응용 프로그램(Applications) 폴더로 복사합니다.
@@ -71,6 +71,11 @@ readme = '''AI DEV DIRECTOR · macOS Preview 0.4.1
 4. 연결 진단에서 Python, Git, AI CLI 설치 및 구독 로그인을 확인합니다.
 5. 작업 화면으로 돌아가 프로젝트 폴더와 역할을 선택합니다.
 6. 종료는 ⌘Q(AI Dev Director 끝내기)입니다. 진행 중이던 작업은 다음에 켤 때 이어서 합니다. 창만 닫으면 작업은 계속되고, Dock 아이콘을 누르면 다시 열립니다.
+
+0.4.2 변경 사항 (앱 열어 보기)
+- 「앱 만들기」의 각 건에 「앱 열어 보기」: 만든 앱을 디렉터 안 새 창에서 바로 써 봄(크롬 필요 없음)
+- 앱마다 고정된 주소라 써 본 기록이 남음. 처음 열면 기획 때 만든 예시 데이터가 채워져 있음
+- 출시 전에는 지금까지 통과한 작업본을 엶
 
 0.4.1 변경 사항 (진짜 맥 프로그램)
 - 앱을 누르면 크롬 탭이 아니라 앱 자체 창이 뜸. Dock 아이콘·메뉴(복사·붙여넣기·확대·새로 고침)·⌘Q 종료

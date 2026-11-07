@@ -16,7 +16,7 @@ import venv
 import webbrowser
 from install_support import install_engine
 
-VERSION = '0.4.1'
+VERSION = '0.4.2'
 URL = 'http://127.0.0.1:8081'
 
 
