@@ -296,6 +296,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else { startOrAttach() }
     }
 
+    // 0.4.3: 설정·업데이트 화면은 HUD 안의 대화상자다. 메뉴에서 열면 본 창을 앞으로 가져와 연다.
+    @objc func openSettings(_ sender: Any?) {
+        main.window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        main.web.evaluateJavaScript("window.openDirectorSettings && window.openDirectorSettings()", completionHandler: nil)
+    }
+
     @objc func reloadPage(_ sender: Any?) {
         (NSApp.keyWindow?.contentView as? WKWebView ?? main.web).reload()
     }
@@ -353,6 +360,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         add("AI Dev Director", [
             item("AI Dev Director 정보", #selector(NSApplication.orderFrontStandardAboutPanel(_:)), ""),
+            item("업데이트 확인…", #selector(openSettings(_:)), ""),
+            .separator(),
+            item("설정…", #selector(openSettings(_:)), ","),
             .separator(),
             item("AI Dev Director 가리기", #selector(NSApplication.hide(_:)), "h"),
             item("기타 가리기", #selector(NSApplication.hideOtherApplications(_:)), "h", [.command, .option]),

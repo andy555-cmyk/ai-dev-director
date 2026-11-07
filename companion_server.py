@@ -6,6 +6,7 @@ import secrets
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from urllib.parse import urlsplit, parse_qs
 import dashboard_server as d
@@ -17,7 +18,7 @@ STATIC_FILES = {'/': 'index.html', '/console.js': 'console.js', '/console.css': 
                 '/grok.js': 'grok.js', '/grok.css': 'grok.css', '/polish.css': 'polish.css',
                 '/stage.css': 'stage.css', '/trinity.js': 'trinity.js', '/stage.js': 'stage.js',
                 '/setup': 'setup.html', '/setup.js': 'setup.js', '/setup.css': 'setup.css',
-                '/hud.css': 'hud.css', '/delivery.js': 'delivery.js', '/delivery.css': 'delivery.css', '/hud.js': 'hud.js', '/hud-backdrop.png': 'hud-backdrop.png', '/hud-core.png': 'hud-core.png',
+                '/hud.css': 'hud.css', '/delivery.js': 'delivery.js', '/delivery.css': 'delivery.css', '/settings.js': 'settings.js', '/settings.css': 'settings.css', '/hud.js': 'hud.js', '/hud-backdrop.png': 'hud-backdrop.png', '/hud-core.png': 'hud-core.png',
                 **{'/hud-icon-'+name+'.svg': 'hud-icon-'+name+'.svg'
                    for name in ('atom','circuit-tree','folder-open','paper-plane-right','shield-check',
                                 'link','play','stop','file-text','flask','cube','scales')}}
@@ -139,6 +140,11 @@ class CompanionHandler(d.DashboardHandler):
             from core.desktop_connections import snapshot
             report = cached()
             return self._send_json({'report': report, 'connections': snapshot(report, ROOT)})
+        if path == '/ops/update':                     # 0.4.3 설정 · 업데이트
+            if not self.authorized():
+                return self._send_json({'error': 'local authenticated request required'}, 403)
+            from core.updater import updater
+            return self._send_json(updater().snapshot())
         if path == '/ops/roles':
             from core.role_settings import current, effective
             config = d.load_config()
@@ -373,6 +379,36 @@ class CompanionHandler(d.DashboardHandler):
             import threading
             threading.Thread(target=self.server.shutdown, name='director-shutdown', daemon=True).start()
             return self._send_json({'stopping': True, 'message': 'AI DEV를 멈춥니다. 기록과 작업본은 남고, 다시 켜면 중단된 미션을 이어갑니다.'})
+        if self.path in ('/ops/update/check', '/ops/update/apply', '/ops/settings'):
+            if not d.is_request_origin_allowed(self.headers, self.server.server_address[1])[0] or not self.authorized():
+                return self._send_json({'error': 'local authenticated request required'}, 403)
+            from core import updater as up
+            u = up.updater()
+            try:
+                size = int(self.headers.get('Content-Length') or 0)
+                if self.path == '/ops/settings':
+                    if not 0 < size <= 2048 or self.headers.get('Content-Type', '').split(';')[0] != 'application/json':
+                        raise ValueError('JSON 요청이 필요합니다')
+                    up.save_settings(json.loads(self.rfile.read(size)))
+                    return self._send_json(u.snapshot())
+                if size:
+                    self.rfile.read(min(size, 65536))
+                if u.busy():
+                    return self._send_json(u.snapshot(), 202)
+                import threading
+                if self.path == '/ops/update/check':
+                    threading.Thread(target=u.check, name='update-check', daemon=True).start()
+                else:
+                    if not u.can_install():
+                        raise ValueError('개발용으로 실행 중이라 앱을 바꿀 수 없습니다 (설치된 앱에서만 됨)')
+                    if u.state.get('state') not in ('available', 'ready'):
+                        raise ValueError('먼저 업데이트를 확인하세요')
+                    u._set(state='downloading', error='')
+                    threading.Thread(target=u.apply, name='update-apply', daemon=True).start()
+                time.sleep(0.2)
+                return self._send_json(u.snapshot(), 202)
+            except (ValueError, TypeError) as exc:
+                return self._send_json({'error': str(exc)}, 400)
         if self.path == '/ops/pick-folder':
             if not d.is_request_origin_allowed(self.headers, self.server.server_address[1])[0] or not self.authorized():
                 return self._send_json({'error': 'local authenticated request required'}, 403)
@@ -456,6 +492,8 @@ def run():
             if dlv.get('phase') in delivery.ACTIVE and not dlv.get('stop_requested'):
                 delivery_service.advance(dlv['delivery_id'])
     threading.Thread(target=_resume_deliveries, name='delivery-resume', daemon=True).start()
+    from core.updater import start_auto_check       # 0.4.3: 켤 때 10초 뒤, 그다음 6시간마다 (설정에서 끌 수 있음)
+    start_auto_check()
     server.stopping = False
     print('AI DEV × SOLOMON http://127.0.0.1:' + str(server.server_address[1]), flush=True)
     try:

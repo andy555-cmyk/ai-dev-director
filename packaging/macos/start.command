@@ -1,6 +1,8 @@
 #!/bin/bash
 set -uo pipefail
 RESOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
+# 0.4.3: the in-app updater swaps this bundle, so the engine must know where it is.
+case "$RESOURCE_DIR" in *.app/Contents/Resources) export AI_DEV_DIRECTOR_BUNDLE="${RESOURCE_DIR%/Contents/Resources}";; esac
 APP_DATA="$HOME/Library/Application Support/AI Dev Director"
 BACKGROUND=""
 [ "${1:-}" = "--background" ] && BACKGROUND=1
