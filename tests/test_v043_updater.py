@@ -210,3 +210,37 @@ def test_missing_repo_gives_korean_reason(monkeypatch):
     monkeypatch.setattr(up, '_gh', lambda: None)
     with pytest.raises(up.UpdateError, match='출시된 판이 없습니다'):
         up.latest_release('owner/none')
+
+
+def _release_tool():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location('release_mac', Path(__file__).resolve().parents[1] / 'tools' / 'release_mac.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_pushed_public_key_is_registered_but_cannot_replace_a_signer(monkeypatch, tmp_path):
+    rm = _release_tool()
+    (tmp_path / 'core').mkdir()
+    src = (Path(__file__).resolve().parents[1] / 'core' / 'updater.py').read_text(encoding='utf-8')
+    (tmp_path / 'core' / 'updater.py').write_text(src, encoding='utf-8')
+    keys = tmp_path / 'release' / 'keys'
+    keys.mkdir(parents=True)
+    other = base64.b64encode(ed25519.public_key(bytes([7] * 32))).decode()
+    (keys / '호진.pub').write_text(other + '\n')
+    (keys / '이승원.pub').write_text(other + '\n')          # must not override the owner's key
+    (keys / 'bad.pub').write_text('not-a-key\n')
+    monkeypatch.setattr(rm, 'ROOT', tmp_path)
+    monkeypatch.setattr(rm, 'KEYS_DIR', keys)
+    monkeypatch.setattr(rm.U, 'TRUSTED_KEYS', dict(up.TRUSTED_KEYS))
+    assert rm.register_pushed_keys() == ['호진']
+    out = (tmp_path / 'core' / 'updater.py').read_text(encoding='utf-8')
+    assert "'호진': '%s'" % other in out and out.count("'이승원':") == 1
+    assert rm.register_pushed_keys() == []                     # idempotent
+
+
+def test_next_version_bumps_patch_over_newest_tag(monkeypatch):
+    rm = _release_tool()
+    monkeypatch.setattr(rm, '_git', lambda *a, **k: SimpleNamespace(returncode=0, stdout='v0.4.3\nv0.4.10\n', stderr=''))
+    assert rm.next_version() == '0.4.11'

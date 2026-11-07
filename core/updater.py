@@ -177,7 +177,7 @@ def verify_entry(entry: Any, keys: Optional[Dict[str, str]] = None) -> str:
 
 # ---------------------------------------------------------------- GitHub
 def _gh() -> Optional[str]:
-    for c in (shutil.which('gh'), '/opt/homebrew/bin/gh', '/usr/local/bin/gh'):
+    for c in (shutil.which('gh'), '/opt/homebrew/bin/gh', '/usr/local/bin/gh', str(Path.home() / 'bin' / 'gh')):
         if c and Path(c).exists():
             return c
     return None
