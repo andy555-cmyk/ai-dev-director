@@ -429,6 +429,10 @@ def test_n_version_probe_kills_parent_and_child(tmp_path):
     elapsed = time.time() - t0
     assert v == "UNKNOWN"
     assert elapsed < 10.0
+    if not pid_file.exists():
+        # On a loaded Mac the interpreter may not even reach the fork within 2s; then nothing could leak.
+        # Retry with more time so the parent-and-child kill is still exercised.
+        assert probe_version(str(cli), timeout=6.0) == "UNKNOWN"
     child_pid = int(pid_file.read_text()) if pid_file.exists() else None
     assert child_pid is not None
     assert _wait_dead(child_pid), f"child {child_pid} leaked after probe timeout"
